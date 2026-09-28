@@ -1,11 +1,17 @@
 namespace SilentHillEmulatorRPC.Configuration;
 
 /// <summary>
-/// Root application settings for the Discord RPC Daemon.
+/// Root application settings for the Silent Hill Discord RPC Daemon.
 /// </summary>
 public class AppConfig
 {
+    #region Constants
+
     public const string SectionName = "DiscordRpc";
+
+    #endregion
+
+    #region Properties
 
     /// <summary>
     /// Interval in seconds between process polling cycles (default: 3 seconds).
@@ -23,7 +29,15 @@ public class AppConfig
     public bool AutoReconnect { get; set; } = true;
 
     /// <summary>
+    /// When false (default), Discord Rich Presence will only show Game Title, Elapsed Time,
+    /// Large Icon, and Small Icon without any extra details or state strings.
+    /// </summary>
+    public bool ShowDetailsAndState { get; set; } = false;
+
+    /// <summary>
     /// List of configured game and emulator profiles.
     /// </summary>
     public List<GameProfile> Games { get; set; } = [];
+
+    #endregion
 }

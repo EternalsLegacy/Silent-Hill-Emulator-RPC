@@ -6,12 +6,18 @@ namespace SilentHillEmulatorRPC.Tests;
 
 public class RpcStateMachineTests
 {
+    #region Test Setup
+
     private readonly GameProfile _profile = new()
     {
         Identifier = "TEST_GAME",
         DisplayName = "Test Game",
         DiscordApplicationId = "123456789"
     };
+
+    #endregion
+
+    #region State Transition Tests
 
     [Fact]
     public void InitialState_IsIdle()
@@ -84,4 +90,6 @@ public class RpcStateMachineTests
         Assert.Null(machine.CurrentMatch);
         Assert.Null(machine.SessionStartTimeUtc);
     }
+
+    #endregion
 }

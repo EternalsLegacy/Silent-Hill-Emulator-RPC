@@ -4,7 +4,13 @@ namespace SilentHillEmulatorRPC.Tests;
 
 public class MockProcessProvider : IProcessProvider
 {
+    #region Fields
+
     private readonly List<ProcessSnapshot> _processes = [];
+
+    #endregion
+
+    #region Mock Setup Methods
 
     public void SetProcesses(IEnumerable<ProcessSnapshot> processes)
     {
@@ -36,9 +42,15 @@ public class MockProcessProvider : IProcessProvider
         }
     }
 
+    #endregion
+
+    #region IProcessProvider Implementation
+
     public IReadOnlyList<ProcessSnapshot> GetRunningProcesses() => _processes.AsReadOnly();
 
     public ProcessSnapshot? GetProcessById(int processId) => _processes.FirstOrDefault(p => p.Id == processId);
 
     public bool IsProcessAlive(int processId) => _processes.Any(p => p.Id == processId);
+
+    #endregion
 }

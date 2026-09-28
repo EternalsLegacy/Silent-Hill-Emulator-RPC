@@ -8,14 +8,24 @@ namespace SilentHillEmulatorRPC.State;
 /// </summary>
 public class RpcStateMachine
 {
+    #region Properties
+
     public ServiceState CurrentState { get; private set; } = ServiceState.Idle;
     public GameMatchResult? CurrentMatch { get; private set; }
     public DateTime? SessionStartTimeUtc { get; private set; }
+
+    #endregion
+
+    #region Events
 
     /// <summary>
     /// Event triggered when the state transitions from oldState to newState.
     /// </summary>
     public event Action<ServiceState, ServiceState>? StateChanged;
+
+    #endregion
+
+    #region State Transition Methods
 
     /// <summary>
     /// Transition from Idle or Terminating into ActiveGame upon game detection.
@@ -74,4 +84,6 @@ public class RpcStateMachine
 
         StateChanged?.Invoke(oldState, CurrentState);
     }
+
+    #endregion
 }

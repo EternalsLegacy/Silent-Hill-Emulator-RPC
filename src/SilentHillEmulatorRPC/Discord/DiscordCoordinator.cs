@@ -10,19 +10,33 @@ namespace SilentHillEmulatorRPC.Discord;
 /// </summary>
 public class DiscordCoordinator : IDiscordCoordinator
 {
+    #region Fields
+
     private readonly ILogger<DiscordCoordinator> _logger;
     private readonly object _syncLock = new();
     private DiscordRpcClient? _client;
     private bool _disposed;
+
+    #endregion
+
+    #region Properties
+
+    public bool IsInitialized => _client?.IsInitialized ?? false;
+
+    public string? CurrentApplicationId => _client?.ApplicationID;
+
+    #endregion
+
+    #region Constructor
 
     public DiscordCoordinator(ILogger<DiscordCoordinator> logger)
     {
         _logger = logger;
     }
 
-    public bool IsInitialized => _client?.IsInitialized ?? false;
+    #endregion
 
-    public string? CurrentApplicationId => _client?.ApplicationID;
+    #region Public Methods
 
     public bool Connect(string applicationId)
     {
@@ -148,6 +162,10 @@ public class DiscordCoordinator : IDiscordCoordinator
         }
     }
 
+    #endregion
+
+    #region Private Methods
+
     private void CleanupClient()
     {
         if (_client == null)
@@ -172,6 +190,10 @@ public class DiscordCoordinator : IDiscordCoordinator
         }
     }
 
+    #endregion
+
+    #region IDisposable Support
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -186,4 +208,6 @@ public class DiscordCoordinator : IDiscordCoordinator
         Dispose();
         return ValueTask.CompletedTask;
     }
+
+    #endregion
 }

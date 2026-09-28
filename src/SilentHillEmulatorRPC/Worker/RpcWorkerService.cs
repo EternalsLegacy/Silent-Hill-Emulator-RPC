@@ -10,34 +10,51 @@ using SilentHillEmulatorRPC.State;
 namespace SilentHillEmulatorRPC.Worker;
 
 /// <summary>
-/// Background daemon executing the polling loop and driving the RPC state machine.
+/// Background daemon executing the process polling loop and driving the RPC state machine.
 /// </summary>
 public class RpcWorkerService : BackgroundService
 {
+    #region Fields
+
     private readonly IOptionsMonitor<AppConfig> _configMonitor;
+    private readonly IProfileManager _profileManager;
     private readonly IGameDetector _gameDetector;
     private readonly IDiscordCoordinator _discordCoordinator;
     private readonly IProcessProvider _processProvider;
+    private readonly IRpcStateTracker _stateTracker;
     private readonly ILogger<RpcWorkerService> _logger;
     private readonly RpcStateMachine _stateMachine = new();
 
     private DateTime _lastReconnectAttempt = DateTime.MinValue;
 
+    #endregion
+
+    #region Constructor
+
     public RpcWorkerService(
         IOptionsMonitor<AppConfig> configMonitor,
+        IProfileManager profileManager,
         IGameDetector gameDetector,
         IDiscordCoordinator discordCoordinator,
         IProcessProvider processProvider,
+        IRpcStateTracker stateTracker,
         ILogger<RpcWorkerService> logger)
     {
         _configMonitor = configMonitor;
+        _profileManager = profileManager;
         _gameDetector = gameDetector;
         _discordCoordinator = discordCoordinator;
         _processProvider = processProvider;
+        _stateTracker = stateTracker;
         _logger = logger;
 
-        _stateMachine.StateChanged += OnStateChanged;
+        _stateMachine.StateChanged += OnStateMachineChanged;
+        _profileManager.ProfileToggled += OnProfileToggled;
     }
+
+    #endregion
+
+    #region BackgroundService Overrides
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -95,6 +112,10 @@ public class RpcWorkerService : BackgroundService
         await base.StopAsync(cancellationToken);
     }
 
+    #endregion
+
+    #region State Handling Methods
+
     private void HandleIdleState(AppConfig config)
     {
         var processes = _processProvider.GetRunningProcesses();
@@ -117,13 +138,13 @@ public class RpcWorkerService : BackgroundService
         _logger.LogInformation(">>> Game detected: {DisplayName} (PID: {Pid}, Process: '{ProcessName}')",
             match.Profile.DisplayName, match.ProcessId, match.ProcessName);
 
-        // Connect Discord IPC
+        // Connect to Discord IPC
         _discordCoordinator.Connect(match.Profile.DiscordApplicationId);
 
         // Transition state
         _stateMachine.TransitionToActive(match);
 
-        // Publish initial presence
+        // Publish presence
         PublishPresence(match);
     }
 
@@ -132,6 +153,17 @@ public class RpcWorkerService : BackgroundService
         var current = _stateMachine.CurrentMatch;
         if (current == null)
         {
+            _stateMachine.TransitionToTerminating();
+            return;
+        }
+
+        // Check if the current profile was disabled in the tray menu
+        var profile = config.Games.FirstOrDefault(g =>
+            string.Equals(g.Identifier, current.Profile.Identifier, StringComparison.OrdinalIgnoreCase));
+
+        if (profile != null && !profile.Enabled)
+        {
+            _logger.LogInformation("Active game {DisplayName} was disabled via UI.", current.Profile.DisplayName);
             _stateMachine.TransitionToTerminating();
             return;
         }
@@ -166,14 +198,6 @@ public class RpcWorkerService : BackgroundService
                 }
             }
         }
-
-        // Check if metadata (window title or details) changed
-        if (updatedResult != null && (updatedResult.Details != current.Details || updatedResult.State != current.State))
-        {
-            _logger.LogDebug("Presence metadata updated: {Details} | {State}", updatedResult.Details, updatedResult.State);
-            _stateMachine.UpdateActiveMatch(updatedResult);
-            PublishPresence(updatedResult);
-        }
     }
 
     private void HandleTerminatingState()
@@ -193,31 +217,68 @@ public class RpcWorkerService : BackgroundService
         _stateMachine.TransitionToIdle();
     }
 
+    #endregion
+
+    #region Presence Publishing
+
     private void PublishPresence(GameMatchResult match)
     {
         var startTime = _stateMachine.SessionStartTimeUtc ?? DateTime.UtcNow;
+        var config = _configMonitor.CurrentValue;
+
+        // When ShowDetailsAndState is false (default), omit Details and State entirely
+        // so Discord displays strictly: Game Title, Elapsed Time, Large Icon, and Small Icon (like Destiny 2).
+        string? details = null;
+        string? state = null;
+
+        if (config.ShowDetailsAndState)
+        {
+            details = string.IsNullOrWhiteSpace(match.Details) ? null : match.Details;
+            state = string.IsNullOrWhiteSpace(match.State) ? null : match.State;
+        }
 
         var presence = new RichPresence
         {
-            Details = match.Details,
-            State = match.State,
+            Details = details,
+            State = state,
             Timestamps = new Timestamps(startTime),
             Assets = new Assets
             {
                 LargeImageKey = match.LargeImageKey,
-                LargeImageText = match.LargeImageText,
-                SmallImageKey = match.SmallImageKey,
-                SmallImageText = match.SmallImageText
+                LargeImageText = string.IsNullOrWhiteSpace(match.LargeImageText) ? null : match.LargeImageText,
+                SmallImageKey = string.IsNullOrWhiteSpace(match.SmallImageKey) ? null : match.SmallImageKey,
+                SmallImageText = string.IsNullOrWhiteSpace(match.SmallImageText) ? null : match.SmallImageText
             }
         };
 
         _discordCoordinator.SetPresence(presence);
     }
 
-    private void OnStateChanged(ServiceState oldState, ServiceState newState)
+    #endregion
+
+    #region Event Callbacks
+
+    private void OnStateMachineChanged(ServiceState oldState, ServiceState newState)
     {
         _logger.LogInformation("State transition: [{OldState}] -> [{NewState}]", oldState, newState);
+        _stateTracker.UpdateState(newState, _stateMachine.CurrentMatch, _stateMachine.SessionStartTimeUtc);
     }
+
+    private void OnProfileToggled(string identifier, bool isEnabled)
+    {
+        if (!isEnabled &&
+            _stateMachine.CurrentState == ServiceState.ActiveGame &&
+            _stateMachine.CurrentMatch != null &&
+            string.Equals(_stateMachine.CurrentMatch.Profile.Identifier, identifier, StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogInformation("Currently running game [{Identifier}] was disabled by user in tray menu. Terminating presence.", identifier);
+            _stateMachine.TransitionToTerminating();
+        }
+    }
+
+    #endregion
+
+    #region Logging Helpers
 
     private void LogLoadedProfiles(AppConfig config)
     {
@@ -238,4 +299,6 @@ public class RpcWorkerService : BackgroundService
                 profile.Identifier, profile.DisplayName, processList, titleFilter);
         }
     }
+
+    #endregion
 }

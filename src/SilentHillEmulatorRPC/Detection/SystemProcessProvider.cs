@@ -10,12 +10,22 @@ namespace SilentHillEmulatorRPC.Detection;
 /// </summary>
 public class SystemProcessProvider : IProcessProvider
 {
+    #region Fields
+
     private readonly ILogger<SystemProcessProvider> _logger;
+
+    #endregion
+
+    #region Constructor
 
     public SystemProcessProvider(ILogger<SystemProcessProvider> logger)
     {
         _logger = logger;
     }
+
+    #endregion
+
+    #region Public Methods
 
     public IReadOnlyList<ProcessSnapshot> GetRunningProcesses()
     {
@@ -66,12 +76,10 @@ public class SystemProcessProvider : IProcessProvider
         }
         catch (ArgumentException)
         {
-            // Process no longer exists
             return null;
         }
         catch (InvalidOperationException)
         {
-            // Process has exited
             return null;
         }
         catch (Exception ex)
@@ -93,6 +101,10 @@ public class SystemProcessProvider : IProcessProvider
             return false;
         }
     }
+
+    #endregion
+
+    #region Private Methods
 
     private ProcessSnapshot? CreateSnapshot(Process process)
     {
@@ -116,8 +128,6 @@ public class SystemProcessProvider : IProcessProvider
                 allTitles.Add(mainTitle);
             }
 
-            // On Windows, if MainWindowTitle is empty or for extra coverage (e.g. emulators),
-            // enumerate top-level HWNDs owned by this process.
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 var additionalTitles = GetWindowsForProcess(process.Id);
@@ -134,10 +144,11 @@ public class SystemProcessProvider : IProcessProvider
         }
         catch (Exception)
         {
-            // Process may have terminated between enumeration and inspection
             return null;
         }
     }
+
+    #endregion
 
     #region Win32 Window Enumeration
 

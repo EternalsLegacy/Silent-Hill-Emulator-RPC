@@ -7,25 +7,35 @@ namespace SilentHillEmulatorRPC.Configuration;
 /// </summary>
 public class GameProfile
 {
+    #region Identification & Display
+
     /// <summary>
     /// Unique identifier for this game profile (e.g., "SH1_DUCK", "SH3_RELOADED").
     /// </summary>
     public string Identifier { get; set; } = string.Empty;
 
     /// <summary>
-    /// Friendly display name for logs and messages.
+    /// Friendly display name for UI and logs.
     /// </summary>
     public string DisplayName { get; set; } = string.Empty;
 
     /// <summary>
-    /// Whether this game profile is currently active in detection.
+    /// Whether detection is active for this game. Can be toggled via the system tray menu.
     /// </summary>
     public bool Enabled { get; set; } = true;
+
+    #endregion
+
+    #region Discord Application
 
     /// <summary>
     /// The Discord Application / Client ID from the Discord Developer Portal.
     /// </summary>
     public string DiscordApplicationId { get; set; } = string.Empty;
+
+    #endregion
+
+    #region Process & Window Matching
 
     /// <summary>
     /// List of executable names (without .exe, case-insensitive) to watch for.
@@ -33,7 +43,7 @@ public class GameProfile
     public List<string> ProcessNames { get; set; } = [];
 
     /// <summary>
-    /// Legacy/single process name fallback if ProcessNames is omitted in config.
+    /// Legacy or single process name fallback.
     /// </summary>
     public string? ProcessName
     {
@@ -49,9 +59,12 @@ public class GameProfile
 
     /// <summary>
     /// Optional regex or substring filter applied to the process window title.
-    /// Required for emulators like DuckStation running multiple games.
     /// </summary>
     public string? TitlePattern { get; set; }
+
+    #endregion
+
+    #region Rich Presence Assets & Texts
 
     /// <summary>
     /// Asset key in Discord Developer Portal for the main cover image.
@@ -59,27 +72,27 @@ public class GameProfile
     public string LargeImageKey { get; set; } = string.Empty;
 
     /// <summary>
-    /// Hover tooltip text for the large image. Supports tokens like {Title}.
+    /// Tooltip hover text for the large cover image.
     /// </summary>
     public string? LargeImageText { get; set; }
 
     /// <summary>
-    /// Optional asset key in Discord Developer Portal for the small badge/logo (e.g., platform or emulator logo).
+    /// Asset key in Discord Developer Portal for the small badge/logo.
     /// </summary>
     public string? SmallImageKey { get; set; }
 
     /// <summary>
-    /// Hover tooltip text for the small badge.
+    /// Tooltip hover text for the small badge.
     /// </summary>
     public string? SmallImageText { get; set; }
 
     /// <summary>
-    /// Line 1 of Discord Rich Presence (Details). Supports tokens like {Title}.
+    /// Optional Line 1 text for Discord Rich Presence (omitted when empty or ShowDetailsAndState is false).
     /// </summary>
     public string? DefaultDetailsText { get; set; }
 
     /// <summary>
-    /// Line 2 of Discord Rich Presence (State). Supports tokens like {Title}.
+    /// Optional Line 2 text for Discord Rich Presence (omitted when empty or ShowDetailsAndState is false).
     /// </summary>
     public string? DefaultStateText { get; set; }
 
@@ -92,4 +105,6 @@ public class GameProfile
     /// Optional regex pattern to extract dynamic state from window title.
     /// </summary>
     public string? DynamicStatePattern { get; set; }
+
+    #endregion
 }

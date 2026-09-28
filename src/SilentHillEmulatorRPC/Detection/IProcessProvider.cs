@@ -6,6 +6,8 @@ namespace SilentHillEmulatorRPC.Detection;
 /// </summary>
 public interface IProcessProvider
 {
+    #region Methods
+
     /// <summary>
     /// Returns snapshots of all currently running processes.
     /// </summary>
@@ -20,4 +22,6 @@ public interface IProcessProvider
     /// Checks if a process with the specified ID is still alive.
     /// </summary>
     bool IsProcessAlive(int processId);
+
+    #endregion
 }

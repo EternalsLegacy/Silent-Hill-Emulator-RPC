@@ -6,6 +6,8 @@ namespace SilentHillEmulatorRPC.Tests;
 
 public class GameDetectorTests
 {
+    #region Test Fixtures & Setup
+
     private readonly GameDetector _detector = new(NullLogger<GameDetector>.Instance);
 
     private readonly GameProfile _sh1DuckProfile = new()
@@ -40,6 +42,10 @@ public class GameDetectorTests
         DefaultStateText = "In the Otherworld"
     };
 
+    #endregion
+
+    #region Direct Process Detection Tests
+
     [Fact]
     public void DetectGame_MatchesDirectProcess_WithoutTitlePattern()
     {
@@ -55,6 +61,28 @@ public class GameDetectorTests
         Assert.Equal("Heather's Nightmare", match.Details);
         Assert.Equal("In the Otherworld", match.State);
     }
+
+    [Fact]
+    public void DetectGame_RespectsDisabledProfile()
+    {
+        var disabledProfile = new GameProfile
+        {
+            Identifier = "SH3_DISABLED",
+            Enabled = false,
+            ProcessNames = ["sh3"]
+        };
+
+        var mockProvider = new MockProcessProvider();
+        mockProvider.AddProcess(101, "sh3", "Silent Hill 3");
+
+        var match = _detector.DetectGame([disabledProfile], mockProvider.GetRunningProcesses());
+
+        Assert.Null(match);
+    }
+
+    #endregion
+
+    #region Emulator & Window Title Detection Tests
 
     [Fact]
     public void DetectGame_DuckStationWithSilentHillTitle_MatchesSuccessfully()
@@ -95,65 +123,9 @@ public class GameDetectorTests
     }
 
     [Fact]
-    public void DetectGame_RespectsDisabledProfile()
-    {
-        var disabledProfile = new GameProfile
-        {
-            Identifier = "SH3_DISABLED",
-            Enabled = false,
-            ProcessNames = ["sh3"]
-        };
-
-        var mockProvider = new MockProcessProvider();
-        mockProvider.AddProcess(101, "sh3", "Silent Hill 3");
-
-        var match = _detector.DetectGame([disabledProfile], mockProvider.GetRunningProcesses());
-
-        Assert.Null(match);
-    }
-
-    [Fact]
-    public void IsMatchStillActive_ReturnsTrue_WhenProcessAliveAndTitleMatches()
-    {
-        var mockProvider = new MockProcessProvider();
-        mockProvider.AddProcess(202, "duckstation", "DuckStation - Silent Hill (USA)");
-
-        var isStillActive = _detector.IsMatchStillActive(_sh1DuckProfile, 202, mockProvider, out var updatedResult);
-
-        Assert.True(isStillActive);
-        Assert.NotNull(updatedResult);
-        Assert.Equal(202, updatedResult.ProcessId);
-    }
-
-    [Fact]
-    public void IsMatchStillActive_ReturnsFalse_WhenProcessExited()
-    {
-        var mockProvider = new MockProcessProvider();
-        // Process is not in mockProvider (exited)
-
-        var isStillActive = _detector.IsMatchStillActive(_sh1DuckProfile, 202, mockProvider, out var updatedResult);
-
-        Assert.False(isStillActive);
-        Assert.Null(updatedResult);
-    }
-
-    [Fact]
-    public void IsMatchStillActive_ReturnsFalse_WhenDuckStationSwitchesGame()
-    {
-        var mockProvider = new MockProcessProvider();
-        mockProvider.AddProcess(202, "duckstation", "DuckStation - Metal Gear Solid (USA)");
-
-        var isStillActive = _detector.IsMatchStillActive(_sh1DuckProfile, 202, mockProvider, out var updatedResult);
-
-        Assert.False(isStillActive);
-        Assert.Null(updatedResult);
-    }
-
-    [Fact]
     public void DetectGame_MatchesWhenMainWindowTitleIsEmpty_ButChildWindowMatches()
     {
         var mockProvider = new MockProcessProvider();
-        // MainWindowTitle is empty (""), but secondary window has the game title
         mockProvider.AddProcess(505, "duckstation-qt-x64-ReleaseLTCG", "", "DuckStation - Silent Hill (USA) [SLUS-00898]");
 
         var match = _detector.DetectGame([_sh1DuckProfile], mockProvider.GetRunningProcesses());
@@ -186,5 +158,46 @@ public class GameDetectorTests
         Assert.Equal("Silent Hill 2: Director's Cut ", match.Details);
         Assert.Equal("In Emulator", match.State);
     }
-}
 
+    #endregion
+
+    #region IsMatchStillActive Tests
+
+    [Fact]
+    public void IsMatchStillActive_ReturnsTrue_WhenProcessAliveAndTitleMatches()
+    {
+        var mockProvider = new MockProcessProvider();
+        mockProvider.AddProcess(202, "duckstation", "DuckStation - Silent Hill (USA)");
+
+        var isStillActive = _detector.IsMatchStillActive(_sh1DuckProfile, 202, mockProvider, out var updatedResult);
+
+        Assert.True(isStillActive);
+        Assert.NotNull(updatedResult);
+        Assert.Equal(202, updatedResult.ProcessId);
+    }
+
+    [Fact]
+    public void IsMatchStillActive_ReturnsFalse_WhenProcessExited()
+    {
+        var mockProvider = new MockProcessProvider();
+
+        var isStillActive = _detector.IsMatchStillActive(_sh1DuckProfile, 202, mockProvider, out var updatedResult);
+
+        Assert.False(isStillActive);
+        Assert.Null(updatedResult);
+    }
+
+    [Fact]
+    public void IsMatchStillActive_ReturnsFalse_WhenDuckStationSwitchesGame()
+    {
+        var mockProvider = new MockProcessProvider();
+        mockProvider.AddProcess(202, "duckstation", "DuckStation - Metal Gear Solid (USA)");
+
+        var isStillActive = _detector.IsMatchStillActive(_sh1DuckProfile, 202, mockProvider, out var updatedResult);
+
+        Assert.False(isStillActive);
+        Assert.Null(updatedResult);
+    }
+
+    #endregion
+}

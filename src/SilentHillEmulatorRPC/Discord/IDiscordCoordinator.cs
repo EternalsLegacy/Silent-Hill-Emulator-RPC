@@ -8,6 +8,8 @@ namespace SilentHillEmulatorRPC.Discord;
 /// </summary>
 public interface IDiscordCoordinator : IAsyncDisposable, IDisposable
 {
+    #region Properties
+
     /// <summary>
     /// Gets whether a Discord RPC client is initialized.
     /// </summary>
@@ -17,6 +19,10 @@ public interface IDiscordCoordinator : IAsyncDisposable, IDisposable
     /// Gets the Discord Application ID currently in use.
     /// </summary>
     string? CurrentApplicationId { get; }
+
+    #endregion
+
+    #region Methods
 
     /// <summary>
     /// Connects to Discord with the specified Application ID.
@@ -38,4 +44,6 @@ public interface IDiscordCoordinator : IAsyncDisposable, IDisposable
     /// Disconnects the current Discord RPC client and releases resources.
     /// </summary>
     void Disconnect();
+
+    #endregion
 }

@@ -9,12 +9,22 @@ namespace SilentHillEmulatorRPC.Detection;
 /// </summary>
 public class GameDetector : IGameDetector
 {
+    #region Fields
+
     private readonly ILogger<GameDetector> _logger;
+
+    #endregion
+
+    #region Constructor
 
     public GameDetector(ILogger<GameDetector> logger)
     {
         _logger = logger;
     }
+
+    #endregion
+
+    #region Public Methods
 
     public GameMatchResult? DetectGame(IReadOnlyList<GameProfile> profiles, IReadOnlyList<ProcessSnapshot> runningProcesses)
     {
@@ -67,6 +77,10 @@ public class GameDetector : IGameDetector
         updatedResult = BuildMatchResult(profile, snapshot, snapshot.BestWindowTitle, new Dictionary<string, string>());
         return true;
     }
+
+    #endregion
+
+    #region Private Matching Logic
 
     private GameMatchResult? TryMatchProfile(GameProfile profile, IReadOnlyList<ProcessSnapshot> processes)
     {
@@ -293,4 +307,6 @@ public class GameDetector : IGameDetector
         }
         return name;
     }
+
+    #endregion
 }
