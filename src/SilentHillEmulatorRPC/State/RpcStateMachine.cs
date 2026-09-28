@@ -31,29 +31,29 @@ public class RpcStateMachine
     /// Transition from Idle or Terminating into ActiveGame upon game detection.
     /// Initializes session elapsed timer.
     /// </summary>
-    public void TransitionToActive(GameMatchResult match)
+    public void TransitionToActive(GameMatchResult Match)
     {
-        ArgumentNullException.ThrowIfNull(match);
+        ArgumentNullException.ThrowIfNull(Match);
 
-        var oldState = CurrentState;
+        ServiceState OldState = CurrentState;
         CurrentState = ServiceState.ActiveGame;
-        CurrentMatch = match;
+        CurrentMatch = Match;
         SessionStartTimeUtc ??= DateTime.UtcNow;
 
-        StateChanged?.Invoke(oldState, CurrentState);
+        StateChanged?.Invoke(OldState, CurrentState);
     }
 
     /// <summary>
     /// Updates metadata for the currently active game (e.g., dynamic title or stage change)
     /// without resetting the session start time.
     /// </summary>
-    public void UpdateActiveMatch(GameMatchResult updatedMatch)
+    public void UpdateActiveMatch(GameMatchResult UpdatedMatch)
     {
-        ArgumentNullException.ThrowIfNull(updatedMatch);
+        ArgumentNullException.ThrowIfNull(UpdatedMatch);
 
         if (CurrentState == ServiceState.ActiveGame)
         {
-            CurrentMatch = updatedMatch;
+            CurrentMatch = UpdatedMatch;
         }
     }
 
@@ -65,10 +65,10 @@ public class RpcStateMachine
         if (CurrentState == ServiceState.Terminating)
             return;
 
-        var oldState = CurrentState;
+        ServiceState OldState = CurrentState;
         CurrentState = ServiceState.Terminating;
 
-        StateChanged?.Invoke(oldState, CurrentState);
+        StateChanged?.Invoke(OldState, CurrentState);
     }
 
     /// <summary>
@@ -77,12 +77,12 @@ public class RpcStateMachine
     /// </summary>
     public void TransitionToIdle()
     {
-        var oldState = CurrentState;
+        ServiceState OldState = CurrentState;
         CurrentState = ServiceState.Idle;
         CurrentMatch = null;
         SessionStartTimeUtc = null;
 
-        StateChanged?.Invoke(oldState, CurrentState);
+        StateChanged?.Invoke(OldState, CurrentState);
     }
 
     #endregion

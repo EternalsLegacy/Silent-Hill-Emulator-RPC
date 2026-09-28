@@ -40,7 +40,7 @@ public interface IRpcStateTracker
     /// <summary>
     /// Updates the state and notifies subscribers.
     /// </summary>
-    void UpdateState(ServiceState state, GameMatchResult? match, DateTime? sessionStartTimeUtc);
+    void UpdateState(ServiceState State, GameMatchResult? Match, DateTime? SessionStartTimeUtc);
 
     #endregion
 }

@@ -12,15 +12,15 @@ public class SystemProcessProvider : IProcessProvider
 {
     #region Fields
 
-    private readonly ILogger<SystemProcessProvider> _logger;
+    private readonly ILogger<SystemProcessProvider> Logger;
 
     #endregion
 
     #region Constructor
 
-    public SystemProcessProvider(ILogger<SystemProcessProvider> logger)
+    public SystemProcessProvider(ILogger<SystemProcessProvider> Logger)
     {
-        _logger = logger;
+        this.Logger = Logger;
     }
 
     #endregion
@@ -29,50 +29,50 @@ public class SystemProcessProvider : IProcessProvider
 
     public IReadOnlyList<ProcessSnapshot> GetRunningProcesses()
     {
-        var snapshots = new List<ProcessSnapshot>();
-        Process[] processes;
+        List<ProcessSnapshot> Snapshots = new List<ProcessSnapshot>();
+        Process[] Processes;
 
         try
         {
-            processes = Process.GetProcesses();
+            Processes = Process.GetProcesses();
         }
-        catch (Exception ex)
+        catch (Exception Ex)
         {
-            _logger.LogError(ex, "Failed to retrieve system processes.");
-            return snapshots;
+            Logger.LogError(Ex, "Failed to retrieve system processes.");
+            return Snapshots;
         }
 
-        foreach (var process in processes)
+        foreach (Process ProcessItem in Processes)
         {
             try
             {
-                var snapshot = CreateSnapshot(process);
-                if (snapshot != null)
+                ProcessSnapshot? Snapshot = CreateSnapshot(ProcessItem);
+                if (Snapshot != null)
                 {
-                    snapshots.Add(snapshot);
+                    Snapshots.Add(Snapshot);
                 }
             }
             finally
             {
-                process.Dispose();
+                ProcessItem.Dispose();
             }
         }
 
-        return snapshots;
+        return Snapshots;
     }
 
-    public ProcessSnapshot? GetProcessById(int processId)
+    public ProcessSnapshot? GetProcessById(int ProcessId)
     {
         try
         {
-            using var process = Process.GetProcessById(processId);
-            if (process.HasExited)
+            using Process TargetProcess = Process.GetProcessById(ProcessId);
+            if (TargetProcess.HasExited)
             {
                 return null;
             }
 
-            process.Refresh();
-            return CreateSnapshot(process);
+            TargetProcess.Refresh();
+            return CreateSnapshot(TargetProcess);
         }
         catch (ArgumentException)
         {
@@ -82,19 +82,19 @@ public class SystemProcessProvider : IProcessProvider
         {
             return null;
         }
-        catch (Exception ex)
+        catch (Exception Ex)
         {
-            _logger.LogTrace(ex, "Could not get process snapshot for PID {ProcessId}.", processId);
+            Logger.LogTrace(Ex, "Could not get process snapshot for PID {ProcessId}.", ProcessId);
             return null;
         }
     }
 
-    public bool IsProcessAlive(int processId)
+    public bool IsProcessAlive(int ProcessId)
     {
         try
         {
-            using var process = Process.GetProcessById(processId);
-            return !process.HasExited;
+            using Process TargetProcess = Process.GetProcessById(ProcessId);
+            return !TargetProcess.HasExited;
         }
         catch
         {
@@ -106,41 +106,41 @@ public class SystemProcessProvider : IProcessProvider
 
     #region Private Methods
 
-    private ProcessSnapshot? CreateSnapshot(Process process)
+    private ProcessSnapshot? CreateSnapshot(Process TargetProcess)
     {
         try
         {
-            var name = process.ProcessName;
-            var mainTitle = string.Empty;
+            string ProcessName = TargetProcess.ProcessName;
+            string MainTitle = string.Empty;
 
             try
             {
-                mainTitle = process.MainWindowTitle;
+                MainTitle = TargetProcess.MainWindowTitle;
             }
             catch
             {
                 // Can happen on protected/system processes
             }
 
-            var allTitles = new List<string>();
-            if (!string.IsNullOrWhiteSpace(mainTitle))
+            List<string> AllTitles = new List<string>();
+            if (!string.IsNullOrWhiteSpace(MainTitle))
             {
-                allTitles.Add(mainTitle);
+                AllTitles.Add(MainTitle);
             }
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                var additionalTitles = GetWindowsForProcess(process.Id);
-                foreach (var title in additionalTitles)
+                List<string> AdditionalTitles = GetWindowsForProcess(TargetProcess.Id);
+                foreach (string Title in AdditionalTitles)
                 {
-                    if (!allTitles.Contains(title, StringComparer.OrdinalIgnoreCase))
+                    if (!AllTitles.Contains(Title, StringComparer.OrdinalIgnoreCase))
                     {
-                        allTitles.Add(title);
+                        AllTitles.Add(Title);
                     }
                 }
             }
 
-            return new ProcessSnapshot(process.Id, name, mainTitle, allTitles);
+            return new ProcessSnapshot(TargetProcess.Id, ProcessName, MainTitle, AllTitles);
         }
         catch (Exception)
         {
@@ -152,42 +152,42 @@ public class SystemProcessProvider : IProcessProvider
 
     #region Win32 Window Enumeration
 
-    private delegate bool EnumWindowsProc(nint hWnd, nint lParam);
+    private delegate bool EnumWindowsProc(nint HWnd, nint LParam);
 
     [DllImport("user32.dll")]
-    private static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, nint lParam);
+    private static extern bool EnumWindows(EnumWindowsProc LpEnumFunc, nint LParam);
 
     [DllImport("user32.dll", SetLastError = true)]
-    private static extern uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
+    private static extern uint GetWindowThreadProcessId(nint HWnd, out uint LpdwProcessId);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    private static extern int GetWindowText(nint hWnd, StringBuilder lpString, int nMaxCount);
+    private static extern int GetWindowText(nint HWnd, StringBuilder LpString, int NMaxCount);
 
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindowVisible(nint hWnd);
+    private static extern bool IsWindowVisible(nint HWnd);
 
-    private static List<string> GetWindowsForProcess(int targetPid)
+    private static List<string> GetWindowsForProcess(int TargetPid)
     {
-        var titles = new List<string>();
+        List<string> Titles = new List<string>();
 
         try
         {
-            EnumWindows((hWnd, _) =>
+            EnumWindows((HWnd, _) =>
             {
-                if (!IsWindowVisible(hWnd))
+                if (!IsWindowVisible(HWnd))
                     return true;
 
-                GetWindowThreadProcessId(hWnd, out var windowPid);
-                if (windowPid == targetPid)
+                GetWindowThreadProcessId(HWnd, out uint WindowPid);
+                if (WindowPid == TargetPid)
                 {
-                    var sb = new StringBuilder(512);
-                    if (GetWindowText(hWnd, sb, sb.Capacity) > 0)
+                    StringBuilder Sb = new StringBuilder(512);
+                    if (GetWindowText(HWnd, Sb, Sb.Capacity) > 0)
                     {
-                        var title = sb.ToString().Trim();
-                        if (!string.IsNullOrWhiteSpace(title) && !titles.Contains(title, StringComparer.OrdinalIgnoreCase))
+                        string Title = Sb.ToString().Trim();
+                        if (!string.IsNullOrWhiteSpace(Title) && !Titles.Contains(Title, StringComparer.OrdinalIgnoreCase))
                         {
-                            titles.Add(title);
+                            Titles.Add(Title);
                         }
                     }
                 }
@@ -200,7 +200,7 @@ public class SystemProcessProvider : IProcessProvider
             // Ignore Win32 enumeration errors
         }
 
-        return titles;
+        return Titles;
     }
 
     #endregion

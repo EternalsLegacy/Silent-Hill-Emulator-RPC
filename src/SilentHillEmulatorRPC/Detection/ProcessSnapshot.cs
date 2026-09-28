@@ -10,12 +10,14 @@ public record ProcessSnapshot(
     IReadOnlyList<string> AllWindowTitles
 )
 {
+    #region Properties
+
     /// <summary>
     /// Returns true if any window title (main or child/top-level) contains non-whitespace text.
     /// </summary>
     public bool HasAnyWindowTitle => 
         !string.IsNullOrWhiteSpace(MainWindowTitle) || 
-        AllWindowTitles.Any(t => !string.IsNullOrWhiteSpace(t));
+        AllWindowTitles.Any(T => !string.IsNullOrWhiteSpace(T));
 
     /// <summary>
     /// Returns the most descriptive window title available.
@@ -27,7 +29,9 @@ public record ProcessSnapshot(
             if (!string.IsNullOrWhiteSpace(MainWindowTitle))
                 return MainWindowTitle;
 
-            return AllWindowTitles.FirstOrDefault(t => !string.IsNullOrWhiteSpace(t)) ?? string.Empty;
+            return AllWindowTitles.FirstOrDefault(T => !string.IsNullOrWhiteSpace(T)) ?? string.Empty;
         }
     }
+
+    #endregion
 }

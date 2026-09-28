@@ -11,52 +11,52 @@ public class ProfileManagerTests
     [Fact]
     public void SetProfileEnabled_TogglesProfileAndRaisesEvent()
     {
-        var testProfile = new GameProfile
+        GameProfile TestProfile = new GameProfile
         {
             Identifier = "TEST_GAME",
             DisplayName = "Test Game",
             Enabled = true
         };
 
-        var config = new AppConfig
+        AppConfig Config = new AppConfig
         {
-            Games = [testProfile]
+            Games = [TestProfile]
         };
 
-        var mockMonitor = new TestOptionsMonitor<AppConfig>(config);
-        var manager = new ProfileManager(mockMonitor, NullLogger<ProfileManager>.Instance);
+        TestOptionsMonitor<AppConfig> MockMonitor = new TestOptionsMonitor<AppConfig>(Config);
+        ProfileManager Manager = new ProfileManager(MockMonitor, NullLogger<ProfileManager>.Instance);
 
-        string? toggledId = null;
-        bool? toggledState = null;
+        string? ToggledId = null;
+        bool? ToggledState = null;
 
-        manager.ProfileToggled += (id, state) =>
+        Manager.ProfileToggled += (Id, State) =>
         {
-            toggledId = id;
-            toggledState = state;
+            ToggledId = Id;
+            ToggledState = State;
         };
 
-        var result = manager.SetProfileEnabled("TEST_GAME", false);
+        bool Result = Manager.SetProfileEnabled("TEST_GAME", false);
 
-        Assert.True(result);
-        Assert.False(testProfile.Enabled);
-        Assert.Equal("TEST_GAME", toggledId);
-        Assert.False(toggledState);
+        Assert.True(Result);
+        Assert.False(TestProfile.Enabled);
+        Assert.Equal("TEST_GAME", ToggledId);
+        Assert.False(ToggledState);
     }
 
     [Fact]
     public void SetProfileEnabled_UnknownIdentifier_ReturnsFalse()
     {
-        var config = new AppConfig
+        AppConfig Config = new AppConfig
         {
             Games = []
         };
 
-        var mockMonitor = new TestOptionsMonitor<AppConfig>(config);
-        var manager = new ProfileManager(mockMonitor, NullLogger<ProfileManager>.Instance);
+        TestOptionsMonitor<AppConfig> MockMonitor = new TestOptionsMonitor<AppConfig>(Config);
+        ProfileManager Manager = new ProfileManager(MockMonitor, NullLogger<ProfileManager>.Instance);
 
-        var result = manager.SetProfileEnabled("UNKNOWN", true);
+        bool Result = Manager.SetProfileEnabled("UNKNOWN", true);
 
-        Assert.False(result);
+        Assert.False(Result);
     }
 
     #endregion
@@ -65,16 +65,16 @@ public class ProfileManagerTests
 
     private class TestOptionsMonitor<T> : IOptionsMonitor<T> where T : class
     {
-        public TestOptionsMonitor(T currentValue)
+        public TestOptionsMonitor(T CurrentValue)
         {
-            CurrentValue = currentValue;
+            this.CurrentValue = CurrentValue;
         }
 
         public T CurrentValue { get; }
 
-        public T Get(string? name) => CurrentValue;
+        public T Get(string? Name) => CurrentValue;
 
-        public IDisposable? OnChange(Action<T, string?> listener) => null;
+        public IDisposable? OnChange(Action<T, string?> Listener) => null;
     }
 
     #endregion

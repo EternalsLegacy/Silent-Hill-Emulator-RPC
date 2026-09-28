@@ -8,7 +8,7 @@ public class RpcStateMachineTests
 {
     #region Test Setup
 
-    private readonly GameProfile _profile = new()
+    private readonly GameProfile Profile = new()
     {
         Identifier = "TEST_GAME",
         DisplayName = "Test Game",
@@ -22,73 +22,73 @@ public class RpcStateMachineTests
     [Fact]
     public void InitialState_IsIdle()
     {
-        var machine = new RpcStateMachine();
+        RpcStateMachine Machine = new RpcStateMachine();
 
-        Assert.Equal(ServiceState.Idle, machine.CurrentState);
-        Assert.Null(machine.CurrentMatch);
-        Assert.Null(machine.SessionStartTimeUtc);
+        Assert.Equal(ServiceState.Idle, Machine.CurrentState);
+        Assert.Null(Machine.CurrentMatch);
+        Assert.Null(Machine.SessionStartTimeUtc);
     }
 
     [Fact]
     public void TransitionToActive_SetsActiveStateAndSessionTimer()
     {
-        var machine = new RpcStateMachine();
-        var match = new GameMatchResult(
-            _profile, 100, "test", "Test Title", "Details", "State", "large", null, null, null);
+        RpcStateMachine Machine = new RpcStateMachine();
+        GameMatchResult Match = new GameMatchResult(
+            Profile, 100, "test", "Test Title", "Details", "State", "large", null, null, null);
 
-        ServiceState? reportedOld = null;
-        ServiceState? reportedNew = null;
-        machine.StateChanged += (o, n) =>
+        ServiceState? ReportedOld = null;
+        ServiceState? ReportedNew = null;
+        Machine.StateChanged += (OldState, NewState) =>
         {
-            reportedOld = o;
-            reportedNew = n;
+            ReportedOld = OldState;
+            ReportedNew = NewState;
         };
 
-        machine.TransitionToActive(match);
+        Machine.TransitionToActive(Match);
 
-        Assert.Equal(ServiceState.ActiveGame, machine.CurrentState);
-        Assert.NotNull(machine.CurrentMatch);
-        Assert.NotNull(machine.SessionStartTimeUtc);
-        Assert.Equal(ServiceState.Idle, reportedOld);
-        Assert.Equal(ServiceState.ActiveGame, reportedNew);
+        Assert.Equal(ServiceState.ActiveGame, Machine.CurrentState);
+        Assert.NotNull(Machine.CurrentMatch);
+        Assert.NotNull(Machine.SessionStartTimeUtc);
+        Assert.Equal(ServiceState.Idle, ReportedOld);
+        Assert.Equal(ServiceState.ActiveGame, ReportedNew);
     }
 
     [Fact]
     public void UpdateActiveMatch_PreservesOriginalSessionStartTime()
     {
-        var machine = new RpcStateMachine();
-        var initialMatch = new GameMatchResult(
-            _profile, 100, "test", "Old Title", "Old Details", "State", "large", null, null, null);
+        RpcStateMachine Machine = new RpcStateMachine();
+        GameMatchResult InitialMatch = new GameMatchResult(
+            Profile, 100, "test", "Old Title", "Old Details", "State", "large", null, null, null);
 
-        machine.TransitionToActive(initialMatch);
-        var initialStartTime = machine.SessionStartTimeUtc;
+        Machine.TransitionToActive(InitialMatch);
+        DateTime? InitialStartTime = Machine.SessionStartTimeUtc;
 
-        var updatedMatch = new GameMatchResult(
-            _profile, 100, "test", "New Title", "New Details", "State", "large", null, null, null);
+        GameMatchResult UpdatedMatch = new GameMatchResult(
+            Profile, 100, "test", "New Title", "New Details", "State", "large", null, null, null);
 
-        machine.UpdateActiveMatch(updatedMatch);
+        Machine.UpdateActiveMatch(UpdatedMatch);
 
-        Assert.Equal("New Details", machine.CurrentMatch?.Details);
-        Assert.Equal(initialStartTime, machine.SessionStartTimeUtc);
+        Assert.Equal("New Details", Machine.CurrentMatch?.Details);
+        Assert.Equal(InitialStartTime, Machine.SessionStartTimeUtc);
     }
 
     [Fact]
     public void TransitionToTerminating_And_Idle_ResetsMatchAndTimer()
     {
-        var machine = new RpcStateMachine();
-        var match = new GameMatchResult(
-            _profile, 100, "test", "Test Title", "Details", "State", "large", null, null, null);
+        RpcStateMachine Machine = new RpcStateMachine();
+        GameMatchResult Match = new GameMatchResult(
+            Profile, 100, "test", "Test Title", "Details", "State", "large", null, null, null);
 
-        machine.TransitionToActive(match);
-        machine.TransitionToTerminating();
+        Machine.TransitionToActive(Match);
+        Machine.TransitionToTerminating();
 
-        Assert.Equal(ServiceState.Terminating, machine.CurrentState);
+        Assert.Equal(ServiceState.Terminating, Machine.CurrentState);
 
-        machine.TransitionToIdle();
+        Machine.TransitionToIdle();
 
-        Assert.Equal(ServiceState.Idle, machine.CurrentState);
-        Assert.Null(machine.CurrentMatch);
-        Assert.Null(machine.SessionStartTimeUtc);
+        Assert.Equal(ServiceState.Idle, Machine.CurrentState);
+        Assert.Null(Machine.CurrentMatch);
+        Assert.Null(Machine.SessionStartTimeUtc);
     }
 
     #endregion

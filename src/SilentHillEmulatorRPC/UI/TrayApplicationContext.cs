@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Reflection;
 using System.Windows.Forms;
 using Microsoft.Extensions.Logging;
 using SilentHillEmulatorRPC.Configuration;
@@ -17,38 +18,38 @@ public class TrayApplicationContext : ApplicationContext
 {
     #region Fields
 
-    private readonly IProfileManager _profileManager;
-    private readonly IRpcStateTracker _stateTracker;
-    private readonly Action _requestShutdown;
-    private readonly ILogger<TrayApplicationContext> _logger;
-    private readonly SynchronizationContext? _syncContext;
+    private readonly IProfileManager ProfileManager;
+    private readonly IRpcStateTracker StateTracker;
+    private readonly Action RequestShutdown;
+    private readonly ILogger<TrayApplicationContext> Logger;
+    private readonly SynchronizationContext? SyncContext;
 
-    private NotifyIcon? _notifyIcon;
-    private ContextMenuStrip? _contextMenu;
-    private ToolStripMenuItem? _statusMenuItem;
-    private readonly Dictionary<string, ToolStripMenuItem> _gameMenuItems = new(StringComparer.OrdinalIgnoreCase);
-    private bool _preventMenuClose;
+    private NotifyIcon? NotifyIconInstance;
+    private ContextMenuStrip? ContextMenu;
+    private ToolStripMenuItem? StatusMenuItem;
+    private readonly Dictionary<string, ToolStripMenuItem> GameMenuItems = new(StringComparer.OrdinalIgnoreCase);
+    private bool PreventMenuClose;
 
     #endregion
 
     #region Constructor
 
     public TrayApplicationContext(
-        IProfileManager profileManager,
-        IRpcStateTracker stateTracker,
-        Action requestShutdown,
-        ILogger<TrayApplicationContext> logger)
+        IProfileManager ProfileManager,
+        IRpcStateTracker StateTracker,
+        Action RequestShutdown,
+        ILogger<TrayApplicationContext> Logger)
     {
-        _profileManager = profileManager;
-        _stateTracker = stateTracker;
-        _requestShutdown = requestShutdown;
-        _logger = logger;
-        _syncContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
+        this.ProfileManager = ProfileManager;
+        this.StateTracker = StateTracker;
+        this.RequestShutdown = RequestShutdown;
+        this.Logger = Logger;
+        SyncContext = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
 
         InitializeTrayIcon();
 
-        _stateTracker.StateUpdated += OnRpcStateUpdated;
-        _profileManager.ProfileToggled += OnProfileToggledExternal;
+        this.StateTracker.StateUpdated += OnRpcStateUpdated;
+        this.ProfileManager.ProfileToggled += OnProfileToggledExternal;
     }
 
     #endregion
@@ -57,107 +58,99 @@ public class TrayApplicationContext : ApplicationContext
 
     private void InitializeTrayIcon()
     {
-        _contextMenu = new ContextMenuStrip();
+        ContextMenu = new ContextMenuStrip();
         BuildContextMenu();
 
-        var icon = LoadApplicationIcon();
+        Icon AppIcon = LoadApplicationIcon();
 
-        _notifyIcon = new NotifyIcon
+        NotifyIconInstance = new NotifyIcon
         {
-            Icon = icon,
-            ContextMenuStrip = _contextMenu,
+            Icon = AppIcon,
+            ContextMenuStrip = ContextMenu,
             Text = TruncateTooltip("Silent Hill Discord RPC - Ready"),
             Visible = true
         };
 
-        _notifyIcon.MouseClick += OnNotifyIconMouseClick;
-        _notifyIcon.DoubleClick += (s, e) => OpenConfigurationFile();
+        NotifyIconInstance.MouseClick += OnNotifyIconMouseClick;
+        NotifyIconInstance.DoubleClick += (Sender, Args) => OpenConfigurationFile();
     }
 
     private void BuildContextMenu()
     {
-        if (_contextMenu == null) return;
-        _contextMenu.Items.Clear();
-        _gameMenuItems.Clear();
+        if (ContextMenu == null) return;
+        ContextMenu.Items.Clear();
+        GameMenuItems.Clear();
 
-        // Header Title
-        var titleItem = new ToolStripMenuItem("Silent Hill Discord RPC")
+        ToolStripMenuItem TitleItem = new ToolStripMenuItem("Silent Hill Discord RPC")
         {
             Enabled = false,
             Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold)
         };
-        _contextMenu.Items.Add(titleItem);
+        ContextMenu.Items.Add(TitleItem);
 
-        // Status Label
-        _statusMenuItem = new ToolStripMenuItem("⚪ Status: Waiting for game...")
+        StatusMenuItem = new ToolStripMenuItem("⚪ Status: Waiting for game...")
         {
             Enabled = false,
             Font = new Font(SystemFonts.DefaultFont, FontStyle.Italic)
         };
-        _contextMenu.Items.Add(_statusMenuItem);
+        ContextMenu.Items.Add(StatusMenuItem);
 
-        _contextMenu.Items.Add(new ToolStripSeparator());
+        ContextMenu.Items.Add(new ToolStripSeparator());
 
-        // Header for Game Detection Toggles
-        var toggleHeaderItem = new ToolStripMenuItem("Game Detection:")
+        ToolStripMenuItem ToggleHeaderItem = new ToolStripMenuItem("Game Detection:")
         {
             Enabled = false,
             Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold)
         };
-        _contextMenu.Items.Add(toggleHeaderItem);
+        ContextMenu.Items.Add(ToggleHeaderItem);
 
-        // Dynamic Checkboxes for each game profile
-        var profiles = _profileManager.GetProfiles();
-        foreach (var profile in profiles)
+        IReadOnlyList<GameProfile> Profiles = ProfileManager.GetProfiles();
+        foreach (GameProfile Profile in Profiles)
         {
-            var item = new ToolStripMenuItem(profile.DisplayName)
+            ToolStripMenuItem Item = new ToolStripMenuItem(Profile.DisplayName)
             {
-                Checked = profile.Enabled,
+                Checked = Profile.Enabled,
                 CheckOnClick = true
             };
 
-            var id = profile.Identifier;
-            item.Click += (sender, args) =>
+            string Id = Profile.Identifier;
+            Item.Click += (Sender, Args) =>
             {
-                var isChecked = item.Checked;
-                _profileManager.SetProfileEnabled(id, isChecked);
+                bool IsChecked = Item.Checked;
+                ProfileManager.SetProfileEnabled(Id, IsChecked);
             };
 
-            _gameMenuItems[id] = item;
-            _contextMenu.Items.Add(item);
+            GameMenuItems[Id] = Item;
+            ContextMenu.Items.Add(Item);
         }
 
-        _contextMenu.Items.Add(new ToolStripSeparator());
+        ContextMenu.Items.Add(new ToolStripSeparator());
 
-        // Open Configuration
-        var configItem = new ToolStripMenuItem("⚙️ Open Configuration (appsettings.json)", null, (s, e) => OpenConfigurationFile());
-        _contextMenu.Items.Add(configItem);
+        ToolStripMenuItem ConfigItem = new ToolStripMenuItem("⚙️ Open Configuration (appsettings.json)", null, (Sender, Args) => OpenConfigurationFile());
+        ContextMenu.Items.Add(ConfigItem);
 
-        // Open Assets Folder
-        var assetsItem = new ToolStripMenuItem("📁 Open Assets Folder (img)", null, (s, e) => OpenAssetsFolder());
-        _contextMenu.Items.Add(assetsItem);
+        ToolStripMenuItem AssetsItem = new ToolStripMenuItem("📁 Open Assets Folder (img)", null, (Sender, Args) => OpenAssetsFolder());
+        ContextMenu.Items.Add(AssetsItem);
 
-        _contextMenu.Items.Add(new ToolStripSeparator());
+        ContextMenu.Items.Add(new ToolStripSeparator());
 
-        // Exit
-        var exitItem = new ToolStripMenuItem("❌ Exit", null, (s, e) => ExitApplication());
-        _contextMenu.Items.Add(exitItem);
+        ToolStripMenuItem ExitItem = new ToolStripMenuItem("❌ Exit", null, (Sender, Args) => ExitApplication());
+        ContextMenu.Items.Add(ExitItem);
 
-        // Prevent context menu from auto-closing when toggling checkboxes
-        _contextMenu.ItemClicked += (sender, e) =>
+        ContextMenu.ItemClicked += (Sender, E) =>
         {
-            if (e.ClickedItem is ToolStripMenuItem menuItem && _gameMenuItems.ContainsValue(menuItem))
+            if (E.ClickedItem is ToolStripMenuItem MenuItem && GameMenuItems.ContainsValue(MenuItem))
             {
-                _preventMenuClose = true;
+                PreventMenuClose = true;
             }
         };
 
-        _contextMenu.Closing += (sender, e) =>
+        ContextMenu.Closing += (Sender, E) =>
         {
-            if (e.CloseReason == ToolStripDropDownCloseReason.ItemClicked && _preventMenuClose)
+            if (E.CloseReason == ToolStripDropDownCloseReason.ItemClicked && PreventMenuClose)
             {
-                e.Cancel = true;
-                _preventMenuClose = false;
+                E.Cancel = true;
+                PreventMenuClose = false;
             }
         };
     }
@@ -166,15 +159,15 @@ public class TrayApplicationContext : ApplicationContext
 
     #region Event Handlers
 
-    private void OnNotifyIconMouseClick(object? sender, MouseEventArgs e)
+    private void OnNotifyIconMouseClick(object? Sender, MouseEventArgs E)
     {
-        if (e.Button == MouseButtons.Left)
+        if (E.Button == MouseButtons.Left && NotifyIconInstance != null)
         {
             try
             {
-                var method = typeof(NotifyIcon).GetMethod("ShowContextMenu",
-                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
-                method?.Invoke(_notifyIcon, null);
+                MethodInfo? Method = typeof(NotifyIcon).GetMethod("ShowContextMenu",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                Method?.Invoke(NotifyIconInstance, null);
             }
             catch
             {
@@ -183,39 +176,39 @@ public class TrayApplicationContext : ApplicationContext
         }
     }
 
-    private void OnRpcStateUpdated(ServiceState state, GameMatchResult? match)
+    private void OnRpcStateUpdated(ServiceState State, GameMatchResult? Match)
     {
-        _syncContext?.Post(_ =>
+        SyncContext?.Post(_ =>
         {
-            if (_notifyIcon == null || _statusMenuItem == null) return;
+            if (NotifyIconInstance == null || StatusMenuItem == null) return;
 
-            switch (state)
+            switch (State)
             {
-                case ServiceState.ActiveGame when match != null:
-                    _statusMenuItem.Text = $"🟢 Active: {match.Profile.DisplayName}";
-                    _notifyIcon.Text = TruncateTooltip($"Silent Hill RPC - Active: {match.Profile.DisplayName}");
+                case ServiceState.ActiveGame when Match != null:
+                    StatusMenuItem.Text = $"🟢 Active: {Match.Profile.DisplayName}";
+                    NotifyIconInstance.Text = TruncateTooltip($"Silent Hill RPC - Active: {Match.Profile.DisplayName}");
                     break;
 
                 case ServiceState.Terminating:
-                    _statusMenuItem.Text = "🟡 Terminating session...";
-                    _notifyIcon.Text = TruncateTooltip("Silent Hill Discord RPC - Terminating...");
+                    StatusMenuItem.Text = "🟡 Terminating session...";
+                    NotifyIconInstance.Text = TruncateTooltip("Silent Hill Discord RPC - Terminating...");
                     break;
 
                 default:
-                    _statusMenuItem.Text = "⚪ Status: Waiting for game...";
-                    _notifyIcon.Text = TruncateTooltip("Silent Hill Discord RPC - Ready");
+                    StatusMenuItem.Text = "⚪ Status: Waiting for game...";
+                    NotifyIconInstance.Text = TruncateTooltip("Silent Hill Discord RPC - Ready");
                     break;
             }
         }, null);
     }
 
-    private void OnProfileToggledExternal(string identifier, bool isEnabled)
+    private void OnProfileToggledExternal(string Identifier, bool IsEnabled)
     {
-        _syncContext?.Post(_ =>
+        SyncContext?.Post(_ =>
         {
-            if (_gameMenuItems.TryGetValue(identifier, out var item))
+            if (GameMenuItems.TryGetValue(Identifier, out ToolStripMenuItem? Item))
             {
-                item.Checked = isEnabled;
+                Item.Checked = IsEnabled;
             }
         }, null);
     }
@@ -228,12 +221,12 @@ public class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            var configPath = FindAppSettingsPath();
-            if (!string.IsNullOrWhiteSpace(configPath) && File.Exists(configPath))
+            string? ConfigPath = FindAppSettingsPath();
+            if (!string.IsNullOrWhiteSpace(ConfigPath) && File.Exists(ConfigPath))
             {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = configPath,
+                    FileName = ConfigPath,
                     UseShellExecute = true
                 });
             }
@@ -242,9 +235,9 @@ public class TrayApplicationContext : ApplicationContext
                 MessageBox.Show("The file appsettings.json was not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
-        catch (Exception ex)
+        catch (Exception Ex)
         {
-            _logger.LogError(ex, "Failed to open configuration file.");
+            Logger.LogError(Ex, "Failed to open configuration file.");
         }
     }
 
@@ -252,12 +245,12 @@ public class TrayApplicationContext : ApplicationContext
     {
         try
         {
-            var folder = FindAssetsPath();
-            if (!string.IsNullOrWhiteSpace(folder) && Directory.Exists(folder))
+            string? Folder = FindAssetsPath();
+            if (!string.IsNullOrWhiteSpace(Folder) && Directory.Exists(Folder))
             {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = folder,
+                    FileName = Folder,
                     UseShellExecute = true
                 });
             }
@@ -266,24 +259,24 @@ public class TrayApplicationContext : ApplicationContext
                 MessageBox.Show("The assets folder 'img' was not found.", "Notice", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
-        catch (Exception ex)
+        catch (Exception Ex)
         {
-            _logger.LogError(ex, "Failed to open assets folder.");
+            Logger.LogError(Ex, "Failed to open assets folder.");
         }
     }
 
     private void ExitApplication()
     {
-        _logger.LogInformation("Exit requested from System Tray menu.");
+        Logger.LogInformation("Exit requested from System Tray menu.");
 
-        if (_notifyIcon != null)
+        if (NotifyIconInstance != null)
         {
-            _notifyIcon.Visible = false;
-            _notifyIcon.Dispose();
-            _notifyIcon = null;
+            NotifyIconInstance.Visible = false;
+            NotifyIconInstance.Dispose();
+            NotifyIconInstance = null;
         }
 
-        _requestShutdown();
+        RequestShutdown();
         ExitThread();
     }
 
@@ -293,12 +286,12 @@ public class TrayApplicationContext : ApplicationContext
 
     private static Icon LoadApplicationIcon()
     {
-        var icoPath = Path.Combine(AppContext.BaseDirectory, "app.ico");
-        if (File.Exists(icoPath))
+        string IcoPath = Path.Combine(AppContext.BaseDirectory, "app.ico");
+        if (File.Exists(IcoPath))
         {
             try
             {
-                return new Icon(icoPath);
+                return new Icon(IcoPath);
             }
             catch
             {
@@ -311,57 +304,56 @@ public class TrayApplicationContext : ApplicationContext
 
     private static Icon CreateFallbackIcon()
     {
-        using var bitmap = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bitmap))
+        using Bitmap Bmp = new Bitmap(32, 32);
+        using (Graphics G = Graphics.FromImage(Bmp))
         {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
+            G.SmoothingMode = SmoothingMode.AntiAlias;
+            G.Clear(Color.Transparent);
 
-            using var brush = new SolidBrush(Color.FromArgb(180, 20, 20));
-            g.FillEllipse(brush, 2, 2, 28, 28);
+            using SolidBrush Brush = new SolidBrush(Color.FromArgb(180, 20, 20));
+            G.FillEllipse(Brush, 2, 2, 28, 28);
 
-            using var pen = new Pen(Color.White, 2f);
-            g.DrawEllipse(pen, 6, 6, 20, 20);
+            using Pen OutlinePen = new Pen(Color.White, 2f);
+            G.DrawEllipse(OutlinePen, 6, 6, 20, 20);
         }
 
-        return Icon.FromHandle(bitmap.GetHicon());
+        return Icon.FromHandle(Bmp.GetHicon());
     }
 
-    private static string TruncateTooltip(string text)
+    private static string TruncateTooltip(string Text)
     {
-        // Windows NotifyIcon tooltip is limited to 63 characters
-        if (text.Length <= 63)
-            return text;
+        if (Text.Length <= 63)
+            return Text;
 
-        return text[..60] + "...";
+        return Text[..60] + "...";
     }
 
     private static string? FindAppSettingsPath()
     {
-        var exeDir = AppContext.BaseDirectory;
-        var direct = Path.Combine(exeDir, "appsettings.json");
-        if (File.Exists(direct)) return direct;
+        string ExeDir = AppContext.BaseDirectory;
+        string Direct = Path.Combine(ExeDir, "appsettings.json");
+        if (File.Exists(Direct)) return Direct;
 
-        var cwd = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
-        if (File.Exists(cwd)) return cwd;
+        string Cwd = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
+        if (File.Exists(Cwd)) return Cwd;
 
-        var src = Path.Combine(Directory.GetCurrentDirectory(), "src", "SilentHillEmulatorRPC", "appsettings.json");
-        if (File.Exists(src)) return src;
+        string Src = Path.Combine(Directory.GetCurrentDirectory(), "src", "SilentHillEmulatorRPC", "appsettings.json");
+        if (File.Exists(Src)) return Src;
 
-        return direct;
+        return Direct;
     }
 
     private static string? FindAssetsPath()
     {
-        var exeDir = AppContext.BaseDirectory;
-        var direct = Path.Combine(exeDir, "img");
-        if (Directory.Exists(direct)) return direct;
+        string ExeDir = AppContext.BaseDirectory;
+        string Direct = Path.Combine(ExeDir, "img");
+        if (Directory.Exists(Direct)) return Direct;
 
-        var srcImg = Path.Combine(Directory.GetCurrentDirectory(), "src", "img");
-        if (Directory.Exists(srcImg)) return srcImg;
+        string SrcImg = Path.Combine(Directory.GetCurrentDirectory(), "src", "img");
+        if (Directory.Exists(SrcImg)) return SrcImg;
 
-        var parentImg = Path.Combine(Directory.GetCurrentDirectory(), "img");
-        if (Directory.Exists(parentImg)) return parentImg;
+        string ParentImg = Path.Combine(Directory.GetCurrentDirectory(), "img");
+        if (Directory.Exists(ParentImg)) return ParentImg;
 
         return null;
     }
@@ -370,21 +362,21 @@ public class TrayApplicationContext : ApplicationContext
 
     #region Disposal
 
-    protected override void Dispose(bool disposing)
+    protected override void Dispose(bool Disposing)
     {
-        if (disposing)
+        if (Disposing)
         {
-            if (_notifyIcon != null)
+            if (NotifyIconInstance != null)
             {
-                _notifyIcon.Visible = false;
-                _notifyIcon.Dispose();
-                _notifyIcon = null;
+                NotifyIconInstance.Visible = false;
+                NotifyIconInstance.Dispose();
+                NotifyIconInstance = null;
             }
 
-            _contextMenu?.Dispose();
+            ContextMenu?.Dispose();
         }
 
-        base.Dispose(disposing);
+        base.Dispose(Disposing);
     }
 
     #endregion

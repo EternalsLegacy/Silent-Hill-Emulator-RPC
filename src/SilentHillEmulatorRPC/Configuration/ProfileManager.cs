@@ -13,9 +13,9 @@ public class ProfileManager : IProfileManager
 {
     #region Fields
 
-    private readonly IOptionsMonitor<AppConfig> _configMonitor;
-    private readonly ILogger<ProfileManager> _logger;
-    private readonly object _saveLock = new();
+    private readonly IOptionsMonitor<AppConfig> ConfigMonitor;
+    private readonly ILogger<ProfileManager> Logger;
+    private readonly object SaveLock = new();
 
     #endregion
 
@@ -28,11 +28,11 @@ public class ProfileManager : IProfileManager
     #region Constructor
 
     public ProfileManager(
-        IOptionsMonitor<AppConfig> configMonitor,
-        ILogger<ProfileManager> logger)
+        IOptionsMonitor<AppConfig> ConfigMonitor,
+        ILogger<ProfileManager> Logger)
     {
-        _configMonitor = configMonitor;
-        _logger = logger;
+        this.ConfigMonitor = ConfigMonitor;
+        this.Logger = Logger;
     }
 
     #endregion
@@ -41,29 +41,29 @@ public class ProfileManager : IProfileManager
 
     public IReadOnlyList<GameProfile> GetProfiles()
     {
-        return _configMonitor.CurrentValue.Games;
+        return ConfigMonitor.CurrentValue.Games;
     }
 
-    public bool SetProfileEnabled(string identifier, bool isEnabled)
+    public bool SetProfileEnabled(string Identifier, bool IsEnabled)
     {
-        lock (_saveLock)
+        lock (SaveLock)
         {
-            var profile = _configMonitor.CurrentValue.Games
-                .FirstOrDefault(g => string.Equals(g.Identifier, identifier, StringComparison.OrdinalIgnoreCase));
+            GameProfile? Profile = ConfigMonitor.CurrentValue.Games
+                .FirstOrDefault(G => string.Equals(G.Identifier, Identifier, StringComparison.OrdinalIgnoreCase));
 
-            if (profile == null)
+            if (Profile == null)
             {
-                _logger.LogWarning("Profile with identifier '{Identifier}' not found.", identifier);
+                Logger.LogWarning("Profile with identifier '{Identifier}' not found.", Identifier);
                 return false;
             }
 
-            profile.Enabled = isEnabled;
-            PersistProfileState(identifier, isEnabled);
+            Profile.Enabled = IsEnabled;
+            PersistProfileState(Identifier, IsEnabled);
 
-            _logger.LogInformation("Profile '{Identifier}' ({Name}) detection set to {State}.",
-                identifier, profile.DisplayName, isEnabled ? "ENABLED" : "DISABLED");
+            Logger.LogInformation("Profile '{Identifier}' ({Name}) detection set to {State}.",
+                Identifier, Profile.DisplayName, IsEnabled ? "ENABLED" : "DISABLED");
 
-            ProfileToggled?.Invoke(identifier, isEnabled);
+            ProfileToggled?.Invoke(Identifier, IsEnabled);
             return true;
         }
     }
@@ -72,79 +72,76 @@ public class ProfileManager : IProfileManager
 
     #region Private Methods
 
-    private void PersistProfileState(string identifier, bool isEnabled)
+    private void PersistProfileState(string Identifier, bool IsEnabled)
     {
         try
         {
-            var configPath = FindAppSettingsPath();
-            if (string.IsNullOrWhiteSpace(configPath) || !File.Exists(configPath))
+            string? ConfigPath = FindAppSettingsPath();
+            if (string.IsNullOrWhiteSpace(ConfigPath) || !File.Exists(ConfigPath))
             {
-                _logger.LogWarning("appsettings.json not found for persisting state.");
+                Logger.LogWarning("appsettings.json not found for persisting state.");
                 return;
             }
 
-            var jsonContent = File.ReadAllText(configPath);
-            var jsonNode = JsonNode.Parse(jsonContent);
+            string JsonContent = File.ReadAllText(ConfigPath);
+            JsonNode? RootNode = JsonNode.Parse(JsonContent);
 
-            if (jsonNode?["DiscordRpc"]?["Games"] is JsonArray gamesArray)
+            if (RootNode?["DiscordRpc"]?["Games"] is JsonArray GamesArray)
             {
-                var matched = false;
-                foreach (var item in gamesArray)
+                bool Matched = false;
+                foreach (JsonNode? Item in GamesArray)
                 {
-                    if (item is JsonObject obj &&
-                        obj.TryGetPropertyValue("Identifier", out var idNode) &&
-                        string.Equals(idNode?.ToString(), identifier, StringComparison.OrdinalIgnoreCase))
+                    if (Item is JsonObject Obj &&
+                        Obj.TryGetPropertyValue("Identifier", out JsonNode? IdNode) &&
+                        string.Equals(IdNode?.ToString(), Identifier, StringComparison.OrdinalIgnoreCase))
                     {
-                        obj["Enabled"] = isEnabled;
-                        matched = true;
+                        Obj["Enabled"] = IsEnabled;
+                        Matched = true;
                         break;
                     }
                 }
 
-                if (matched)
+                if (Matched)
                 {
-                    var options = new JsonSerializerOptions
+                    JsonSerializerOptions Options = new JsonSerializerOptions
                     {
                         WriteIndented = true,
                         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                     };
 
-                    File.WriteAllText(configPath, jsonNode.ToJsonString(options));
-                    _logger.LogDebug("Persisted enabled state for '{Identifier}' to {Path}", identifier, configPath);
+                    File.WriteAllText(ConfigPath, RootNode.ToJsonString(Options));
+                    Logger.LogDebug("Persisted enabled state for '{Identifier}' to {Path}", Identifier, ConfigPath);
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception Ex)
         {
-            _logger.LogError(ex, "Failed to persist profile state change to appsettings.json.");
+            Logger.LogError(Ex, "Failed to persist profile state change to appsettings.json.");
         }
     }
 
     private static string? FindAppSettingsPath()
     {
-        // Check next to running executable
-        var exeDir = AppContext.BaseDirectory;
-        var directPath = Path.Combine(exeDir, "appsettings.json");
-        if (File.Exists(directPath))
+        string ExeDir = AppContext.BaseDirectory;
+        string DirectPath = Path.Combine(ExeDir, "appsettings.json");
+        if (File.Exists(DirectPath))
         {
-            return directPath;
+            return DirectPath;
         }
 
-        // Check current working directory
-        var cwdPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
-        if (File.Exists(cwdPath))
+        string CwdPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
+        if (File.Exists(CwdPath))
         {
-            return cwdPath;
+            return CwdPath;
         }
 
-        // Check project source directory if running in development
-        var srcPath = Path.Combine(Directory.GetCurrentDirectory(), "src", "SilentHillEmulatorRPC", "appsettings.json");
-        if (File.Exists(srcPath))
+        string SrcPath = Path.Combine(Directory.GetCurrentDirectory(), "src", "SilentHillEmulatorRPC", "appsettings.json");
+        if (File.Exists(SrcPath))
         {
-            return srcPath;
+            return SrcPath;
         }
 
-        return directPath;
+        return DirectPath;
     }
 
     #endregion

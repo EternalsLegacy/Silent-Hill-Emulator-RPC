@@ -28,12 +28,12 @@ public interface IDiscordCoordinator : IAsyncDisposable, IDisposable
     /// Connects to Discord with the specified Application ID.
     /// If already connected with a different Application ID, cleanly switches to the new one.
     /// </summary>
-    bool Connect(string applicationId);
+    bool Connect(string ApplicationId);
 
     /// <summary>
     /// Sets or updates the active Rich Presence in Discord.
     /// </summary>
-    void SetPresence(RichPresence presence);
+    void SetPresence(RichPresence Presence);
 
     /// <summary>
     /// Clears any currently active Rich Presence in Discord.

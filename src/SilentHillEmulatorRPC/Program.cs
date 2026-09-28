@@ -17,75 +17,65 @@ public static class Program
     #region Entry Point
 
     [STAThread]
-    public static async Task Main(string[] args)
+    public static async Task Main(string[] Args)
     {
-        // Initialize Windows Forms subsystem for System Tray NotifyIcon
         Application.SetHighDpiMode(HighDpiMode.SystemAware);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
 
-        // Build generic host with Dependency Injection, Configuration, and Logging
-        var host = CreateHostBuilder(args).Build();
+        IHost HostInstance = CreateHostBuilder(Args).Build();
 
-        // Start background worker services
-        await host.StartAsync();
+        await HostInstance.StartAsync();
 
-        // Resolve dependencies for the System Tray UI
-        var profileManager = host.Services.GetRequiredService<IProfileManager>();
-        var stateTracker = host.Services.GetRequiredService<IRpcStateTracker>();
-        var hostLifetime = host.Services.GetRequiredService<IHostApplicationLifetime>();
-        var logger = host.Services.GetRequiredService<ILogger<TrayApplicationContext>>();
+        IProfileManager ProfileManager = HostInstance.Services.GetRequiredService<IProfileManager>();
+        IRpcStateTracker StateTracker = HostInstance.Services.GetRequiredService<IRpcStateTracker>();
+        IHostApplicationLifetime HostLifetime = HostInstance.Services.GetRequiredService<IHostApplicationLifetime>();
+        ILogger<TrayApplicationContext> Logger = HostInstance.Services.GetRequiredService<ILogger<TrayApplicationContext>>();
 
-        // Create and run the System Tray Application Context
-        using var trayContext = new TrayApplicationContext(
-            profileManager,
-            stateTracker,
-            () => hostLifetime.StopApplication(),
-            logger);
+        using TrayApplicationContext TrayContext = new TrayApplicationContext(
+            ProfileManager,
+            StateTracker,
+            () => HostLifetime.StopApplication(),
+            Logger);
 
-        // Run Windows message loop on STA thread (blocks until Exit in tray menu)
-        Application.Run(trayContext);
+        Application.Run(TrayContext);
 
-        // Graceful host shutdown when tray loop finishes
-        await host.StopAsync();
+        await HostInstance.StopAsync();
     }
 
     #endregion
 
     #region Host Configuration
 
-    public static IHostBuilder CreateHostBuilder(string[] args) =>
-        Host.CreateDefaultBuilder(args)
-            .ConfigureAppConfiguration((hostingContext, config) =>
+    public static IHostBuilder CreateHostBuilder(string[] Args) =>
+        Host.CreateDefaultBuilder(Args)
+            .ConfigureAppConfiguration((HostingContext, Config) =>
             {
-                config.SetBasePath(AppContext.BaseDirectory);
-                config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
-                config.AddEnvironmentVariables(prefix: "SHRPC_");
-                config.AddCommandLine(args);
+                Config.SetBasePath(AppContext.BaseDirectory);
+                Config.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
+                Config.AddEnvironmentVariables(prefix: "SHRPC_");
+                Config.AddCommandLine(Args);
             })
-            .ConfigureLogging((context, logging) =>
+            .ConfigureLogging((Context, Logging) =>
             {
-                logging.ClearProviders();
-                logging.AddConfiguration(context.Configuration.GetSection("Logging"));
-                logging.AddSimpleConsole(options =>
+                Logging.ClearProviders();
+                Logging.AddConfiguration(Context.Configuration.GetSection("Logging"));
+                Logging.AddSimpleConsole(Options =>
                 {
-                    options.TimestampFormat = "[HH:mm:ss] ";
+                    Options.TimestampFormat = "[HH:mm:ss] ";
                 });
             })
-            .ConfigureServices((hostContext, services) =>
+            .ConfigureServices((HostContext, Services) =>
             {
-                // Options binding
-                services.Configure<AppConfig>(hostContext.Configuration.GetSection(AppConfig.SectionName));
+                Services.Configure<AppConfig>(HostContext.Configuration.GetSection(AppConfig.SectionName));
 
-                // Core service registrations
-                services.AddSingleton<IProcessProvider, SystemProcessProvider>();
-                services.AddSingleton<IGameDetector, GameDetector>();
-                services.AddSingleton<IDiscordCoordinator, DiscordCoordinator>();
-                services.AddSingleton<IProfileManager, ProfileManager>();
-                services.AddSingleton<IRpcStateTracker, RpcStateTracker>();
+                Services.AddSingleton<IProcessProvider, SystemProcessProvider>();
+                Services.AddSingleton<IGameDetector, GameDetector>();
+                Services.AddSingleton<IDiscordCoordinator, DiscordCoordinator>();
+                Services.AddSingleton<IProfileManager, ProfileManager>();
+                Services.AddSingleton<IRpcStateTracker, RpcStateTracker>();
 
-                // Background worker
-                services.AddHostedService<RpcWorkerService>();
+                Services.AddHostedService<RpcWorkerService>();
             });
 
     #endregion

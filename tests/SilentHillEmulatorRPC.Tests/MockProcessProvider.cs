@@ -6,39 +6,44 @@ public class MockProcessProvider : IProcessProvider
 {
     #region Fields
 
-    private readonly List<ProcessSnapshot> _processes = [];
+    private readonly List<ProcessSnapshot> Processes = [];
 
     #endregion
 
     #region Mock Setup Methods
 
-    public void SetProcesses(IEnumerable<ProcessSnapshot> processes)
+    public void SetProcesses(IEnumerable<ProcessSnapshot> ProcessSnapshots)
     {
-        _processes.Clear();
-        _processes.AddRange(processes);
+        Processes.Clear();
+        Processes.AddRange(ProcessSnapshots);
     }
 
-    public void AddProcess(int id, string name, string mainTitle, params string[] otherTitles)
+    public void AddProcess(int Id, string Name, string MainTitle, params string[] OtherTitles)
     {
-        var allTitles = new List<string>();
-        if (!string.IsNullOrWhiteSpace(mainTitle)) allTitles.Add(mainTitle);
-        allTitles.AddRange(otherTitles);
+        List<string> AllTitles = new List<string>();
+        if (!string.IsNullOrWhiteSpace(MainTitle)) AllTitles.Add(MainTitle);
+        allTitlesAddRange(OtherTitles);
 
-        _processes.Add(new ProcessSnapshot(id, name, mainTitle, allTitles));
-    }
-
-    public void RemoveProcess(int id)
-    {
-        _processes.RemoveAll(p => p.Id == id);
-    }
-
-    public void UpdateTitle(int id, string newTitle)
-    {
-        var existing = _processes.FirstOrDefault(p => p.Id == id);
-        if (existing != null)
+        void allTitlesAddRange(string[] Titles)
         {
-            _processes.Remove(existing);
-            _processes.Add(new ProcessSnapshot(id, existing.ProcessName, newTitle, [newTitle]));
+            AllTitles.AddRange(Titles);
+        }
+
+        Processes.Add(new ProcessSnapshot(Id, Name, MainTitle, AllTitles));
+    }
+
+    public void RemoveProcess(int Id)
+    {
+        Processes.RemoveAll(P => P.Id == Id);
+    }
+
+    public void UpdateTitle(int Id, string NewTitle)
+    {
+        ProcessSnapshot? Existing = Processes.FirstOrDefault(P => P.Id == Id);
+        if (Existing != null)
+        {
+            Processes.Remove(Existing);
+            Processes.Add(new ProcessSnapshot(Id, Existing.ProcessName, NewTitle, [NewTitle]));
         }
     }
 
@@ -46,11 +51,11 @@ public class MockProcessProvider : IProcessProvider
 
     #region IProcessProvider Implementation
 
-    public IReadOnlyList<ProcessSnapshot> GetRunningProcesses() => _processes.AsReadOnly();
+    public IReadOnlyList<ProcessSnapshot> GetRunningProcesses() => Processes.AsReadOnly();
 
-    public ProcessSnapshot? GetProcessById(int processId) => _processes.FirstOrDefault(p => p.Id == processId);
+    public ProcessSnapshot? GetProcessById(int ProcessId) => Processes.FirstOrDefault(P => P.Id == ProcessId);
 
-    public bool IsProcessAlive(int processId) => _processes.Any(p => p.Id == processId);
+    public bool IsProcessAlive(int ProcessId) => Processes.Any(P => P.Id == ProcessId);
 
     #endregion
 }

@@ -11,70 +11,68 @@ public class GameDetector : IGameDetector
 {
     #region Fields
 
-    private readonly ILogger<GameDetector> _logger;
+    private readonly ILogger<GameDetector> Logger;
 
     #endregion
 
     #region Constructor
 
-    public GameDetector(ILogger<GameDetector> logger)
+    public GameDetector(ILogger<GameDetector> Logger)
     {
-        _logger = logger;
+        this.Logger = Logger;
     }
 
     #endregion
 
     #region Public Methods
 
-    public GameMatchResult? DetectGame(IReadOnlyList<GameProfile> profiles, IReadOnlyList<ProcessSnapshot> runningProcesses)
+    public GameMatchResult? DetectGame(IReadOnlyList<GameProfile> Profiles, IReadOnlyList<ProcessSnapshot> RunningProcesses)
     {
-        var enabledProfiles = profiles.Where(p => p.Enabled).ToList();
-        if (enabledProfiles.Count == 0 || runningProcesses.Count == 0)
+        List<GameProfile> EnabledProfiles = Profiles.Where(P => P.Enabled).ToList();
+        if (EnabledProfiles.Count == 0 || RunningProcesses.Count == 0)
         {
             return null;
         }
 
-        foreach (var profile in enabledProfiles)
+        foreach (GameProfile Profile in EnabledProfiles)
         {
-            var match = TryMatchProfile(profile, runningProcesses);
-            if (match != null)
+            GameMatchResult? Match = TryMatchProfile(Profile, RunningProcesses);
+            if (Match != null)
             {
-                return match;
+                return Match;
             }
         }
 
         return null;
     }
 
-    public bool IsMatchStillActive(GameProfile profile, int processId, IProcessProvider processProvider, out GameMatchResult? updatedResult)
+    public bool IsMatchStillActive(GameProfile Profile, int ProcessId, IProcessProvider ProcessProvider, out GameMatchResult? UpdatedResult)
     {
-        updatedResult = null;
+        UpdatedResult = null;
 
-        var snapshot = processProvider.GetProcessById(processId);
-        if (snapshot == null)
+        ProcessSnapshot? Snapshot = ProcessProvider.GetProcessById(ProcessId);
+        if (Snapshot == null)
         {
             return false;
         }
 
-        // Verify process name still matches
-        if (!MatchesProcessName(profile, snapshot.ProcessName))
+        if (!MatchesProcessName(Profile, Snapshot.ProcessName))
         {
             return false;
         }
 
-        // Verify window title if a pattern is required
-        if (!string.IsNullOrWhiteSpace(profile.TitlePattern))
+        if (!string.IsNullOrWhiteSpace(Profile.TitlePattern))
         {
-            if (!MatchesTitlePattern(profile.TitlePattern, snapshot, out var matchedTitle, out var capturedGroups))
+            if (!MatchesTitlePattern(Profile.TitlePattern, Snapshot, out string MatchedTitle, out Dictionary<string, string> CapturedGroups))
             {
                 return false;
             }
 
-            updatedResult = BuildMatchResult(profile, snapshot, matchedTitle, capturedGroups);
+            UpdatedResult = BuildMatchResult(Profile, Snapshot, MatchedTitle, CapturedGroups);
             return true;
         }
 
-        updatedResult = BuildMatchResult(profile, snapshot, snapshot.BestWindowTitle, new Dictionary<string, string>());
+        UpdatedResult = BuildMatchResult(Profile, Snapshot, Snapshot.BestWindowTitle, new Dictionary<string, string>());
         return true;
     }
 
@@ -82,109 +80,105 @@ public class GameDetector : IGameDetector
 
     #region Private Matching Logic
 
-    private GameMatchResult? TryMatchProfile(GameProfile profile, IReadOnlyList<ProcessSnapshot> processes)
+    private GameMatchResult? TryMatchProfile(GameProfile Profile, IReadOnlyList<ProcessSnapshot> Processes)
     {
-        foreach (var process in processes)
+        foreach (ProcessSnapshot ProcessItem in Processes)
         {
-            if (!MatchesProcessName(profile, process.ProcessName))
+            if (!MatchesProcessName(Profile, ProcessItem.ProcessName))
             {
                 continue;
             }
 
-            // If no title pattern required, match immediately
-            if (string.IsNullOrWhiteSpace(profile.TitlePattern))
+            if (string.IsNullOrWhiteSpace(Profile.TitlePattern))
             {
-                _logger.LogDebug("Matched profile '{Identifier}' on process '{ProcessName}' (PID {Pid}).",
-                    profile.Identifier, process.ProcessName, process.Id);
+                Logger.LogDebug("Matched profile '{Identifier}' on process '{ProcessName}' (PID {Pid}).",
+                    Profile.Identifier, ProcessItem.ProcessName, ProcessItem.Id);
 
-                return BuildMatchResult(profile, process, process.BestWindowTitle, new Dictionary<string, string>());
+                return BuildMatchResult(Profile, ProcessItem, ProcessItem.BestWindowTitle, new Dictionary<string, string>());
             }
 
-            // Window title check
-            if (MatchesTitlePattern(profile.TitlePattern, process, out var matchedTitle, out var capturedGroups))
+            if (MatchesTitlePattern(Profile.TitlePattern, ProcessItem, out string MatchedTitle, out Dictionary<string, string> CapturedGroups))
             {
-                _logger.LogDebug("Matched profile '{Identifier}' on process '{ProcessName}' (PID {Pid}) with title '{Title}'.",
-                    profile.Identifier, process.ProcessName, process.Id, matchedTitle);
+                Logger.LogDebug("Matched profile '{Identifier}' on process '{ProcessName}' (PID {Pid}) with title '{Title}'.",
+                    Profile.Identifier, ProcessItem.ProcessName, ProcessItem.Id, MatchedTitle);
 
-                return BuildMatchResult(profile, process, matchedTitle, capturedGroups);
+                return BuildMatchResult(Profile, ProcessItem, MatchedTitle, CapturedGroups);
             }
         }
 
         return null;
     }
 
-    private static bool MatchesProcessName(GameProfile profile, string processName)
+    private static bool MatchesProcessName(GameProfile Profile, string ProcessName)
     {
-        var cleanProcessName = StripExe(processName);
+        string CleanProcessName = StripExe(ProcessName);
 
-        if (profile.ProcessNames.Count > 0)
+        if (Profile.ProcessNames.Count > 0)
         {
-            return profile.ProcessNames.Any(name =>
-                string.Equals(StripExe(name), cleanProcessName, StringComparison.OrdinalIgnoreCase));
+            return Profile.ProcessNames.Any(Name =>
+                string.Equals(StripExe(Name), CleanProcessName, StringComparison.OrdinalIgnoreCase));
         }
 
-        if (!string.IsNullOrWhiteSpace(profile.ProcessName))
+        if (!string.IsNullOrWhiteSpace(Profile.ProcessName))
         {
-            return string.Equals(StripExe(profile.ProcessName), cleanProcessName, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(StripExe(Profile.ProcessName), CleanProcessName, StringComparison.OrdinalIgnoreCase);
         }
 
         return false;
     }
 
     private static bool MatchesTitlePattern(
-        string pattern,
-        ProcessSnapshot snapshot,
-        out string matchedTitle,
-        out Dictionary<string, string> capturedGroups)
+        string Pattern,
+        ProcessSnapshot Snapshot,
+        out string MatchedTitle,
+        out Dictionary<string, string> CapturedGroups)
     {
-        matchedTitle = string.Empty;
-        capturedGroups = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        MatchedTitle = string.Empty;
+        CapturedGroups = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-        // Titles to check: first MainWindowTitle, then any other window titles
-        var candidateTitles = new List<string>();
-        if (!string.IsNullOrWhiteSpace(snapshot.MainWindowTitle))
+        List<string> CandidateTitles = new List<string>();
+        if (!string.IsNullOrWhiteSpace(Snapshot.MainWindowTitle))
         {
-            candidateTitles.Add(snapshot.MainWindowTitle);
+            CandidateTitles.Add(Snapshot.MainWindowTitle);
         }
-        foreach (var title in snapshot.AllWindowTitles)
+        foreach (string Title in Snapshot.AllWindowTitles)
         {
-            if (!candidateTitles.Contains(title, StringComparer.OrdinalIgnoreCase))
+            if (!CandidateTitles.Contains(Title, StringComparer.OrdinalIgnoreCase))
             {
-                candidateTitles.Add(title);
+                CandidateTitles.Add(Title);
             }
         }
 
-        if (candidateTitles.Count == 0)
+        if (CandidateTitles.Count == 0)
         {
             return false;
         }
 
-        // Try regex match first
-        Regex? regex = null;
+        Regex? CompiledRegex = null;
         try
         {
-            regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(500));
+            CompiledRegex = new Regex(Pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(500));
         }
         catch
         {
             // Invalid regex, will fallback to substring check
         }
 
-        foreach (var title in candidateTitles)
+        foreach (string Title in CandidateTitles)
         {
-            if (regex != null)
+            if (CompiledRegex != null)
             {
                 try
                 {
-                    var match = regex.Match(title);
-                    if (match.Success)
+                    Match RegexMatch = CompiledRegex.Match(Title);
+                    if (RegexMatch.Success)
                     {
-                        matchedTitle = title;
-                        foreach (var groupName in regex.GetGroupNames())
+                        MatchedTitle = Title;
+                        foreach (string GroupName in CompiledRegex.GetGroupNames())
                         {
-                            if (!string.IsNullOrEmpty(groupName) && groupName != "0")
+                            if (!string.IsNullOrEmpty(GroupName) && GroupName != "0")
                             {
-                                capturedGroups[groupName] = match.Groups[groupName].Value;
+                                CapturedGroups[GroupName] = RegexMatch.Groups[GroupName].Value;
                             }
                         }
                         return true;
@@ -192,14 +186,13 @@ public class GameDetector : IGameDetector
                 }
                 catch
                 {
-                    // Regex timeout or evaluation error
+                    // Regex evaluation timeout
                 }
             }
 
-            // Fallback substring check (case-insensitive)
-            if (title.Contains(pattern, StringComparison.OrdinalIgnoreCase))
+            if (Title.Contains(Pattern, StringComparison.OrdinalIgnoreCase))
             {
-                matchedTitle = title;
+                MatchedTitle = Title;
                 return true;
             }
         }
@@ -208,87 +201,86 @@ public class GameDetector : IGameDetector
     }
 
     private static GameMatchResult BuildMatchResult(
-        GameProfile profile,
-        ProcessSnapshot snapshot,
-        string matchedTitle,
-        Dictionary<string, string> capturedGroups)
+        GameProfile Profile,
+        ProcessSnapshot Snapshot,
+        string MatchedTitle,
+        Dictionary<string, string> CapturedGroups)
     {
-        var rawDetails = profile.DefaultDetailsText ?? string.Empty;
-        var rawState = profile.DefaultStateText ?? string.Empty;
+        string RawDetails = Profile.DefaultDetailsText ?? string.Empty;
+        string RawState = Profile.DefaultStateText ?? string.Empty;
 
-        // Apply dynamic pattern extraction if specified
-        if (!string.IsNullOrWhiteSpace(profile.DynamicDetailsPattern))
+        if (!string.IsNullOrWhiteSpace(Profile.DynamicDetailsPattern))
         {
-            var extracted = ExtractRegexMatch(profile.DynamicDetailsPattern, matchedTitle);
-            if (!string.IsNullOrWhiteSpace(extracted))
+            string? Extracted = ExtractRegexMatch(Profile.DynamicDetailsPattern, MatchedTitle);
+            if (!string.IsNullOrWhiteSpace(Extracted))
             {
-                rawDetails = extracted;
+                RawDetails = Extracted;
             }
         }
 
-        if (!string.IsNullOrWhiteSpace(profile.DynamicStatePattern))
+        if (!string.IsNullOrWhiteSpace(Profile.DynamicStatePattern))
         {
-            var extracted = ExtractRegexMatch(profile.DynamicStatePattern, matchedTitle);
-            if (!string.IsNullOrWhiteSpace(extracted))
+            string? Extracted = ExtractRegexMatch(Profile.DynamicStatePattern, MatchedTitle);
+            if (!string.IsNullOrWhiteSpace(Extracted))
             {
-                rawState = extracted;
+                RawState = Extracted;
             }
         }
 
-        var details = InterpolateTokens(rawDetails, profile, snapshot, matchedTitle, capturedGroups);
-        var state = InterpolateTokens(rawState, profile, snapshot, matchedTitle, capturedGroups);
-        var largeText = InterpolateTokens(profile.LargeImageText ?? profile.DisplayName, profile, snapshot, matchedTitle, capturedGroups);
-        var smallText = InterpolateTokens(profile.SmallImageText ?? string.Empty, profile, snapshot, matchedTitle, capturedGroups);
+        string Details = InterpolateTokens(RawDetails, Profile, Snapshot, MatchedTitle, CapturedGroups);
+        string State = InterpolateTokens(RawState, Profile, Snapshot, MatchedTitle, CapturedGroups);
+        string LargeText = InterpolateTokens(Profile.LargeImageText ?? Profile.DisplayName, Profile, Snapshot, MatchedTitle, CapturedGroups);
+        string SmallText = InterpolateTokens(Profile.SmallImageText ?? string.Empty, Profile, Snapshot, MatchedTitle, CapturedGroups);
 
         return new GameMatchResult(
-            profile,
-            snapshot.Id,
-            snapshot.ProcessName,
-            matchedTitle,
-            details,
-            state,
-            profile.LargeImageKey,
-            string.IsNullOrWhiteSpace(largeText) ? null : largeText,
-            string.IsNullOrWhiteSpace(profile.SmallImageKey) ? null : profile.SmallImageKey,
-            string.IsNullOrWhiteSpace(smallText) ? null : smallText
+            Profile,
+            Snapshot.Id,
+            Snapshot.ProcessName,
+            MatchedTitle,
+            Details,
+            State,
+            Profile.LargeImageKey,
+            string.IsNullOrWhiteSpace(LargeText) ? null : LargeText,
+            string.IsNullOrWhiteSpace(Profile.SmallImageKey) ? null : Profile.SmallImageKey,
+            string.IsNullOrWhiteSpace(SmallText) ? null : SmallText
         );
     }
 
     private static string InterpolateTokens(
-        string template,
-        GameProfile profile,
-        ProcessSnapshot snapshot,
-        string matchedTitle,
-        Dictionary<string, string> capturedGroups)
+        string Template,
+        GameProfile Profile,
+        ProcessSnapshot Snapshot,
+        string MatchedTitle,
+        Dictionary<string, string> CapturedGroups)
     {
-        if (string.IsNullOrEmpty(template))
-            return template;
+        if (string.IsNullOrEmpty(Template))
+            return Template;
 
-        var result = template
-            .Replace("{Title}", matchedTitle, StringComparison.OrdinalIgnoreCase)
-            .Replace("{ProcessName}", snapshot.ProcessName, StringComparison.OrdinalIgnoreCase)
-            .Replace("{DisplayName}", profile.DisplayName, StringComparison.OrdinalIgnoreCase)
-            .Replace("{Identifier}", profile.Identifier, StringComparison.OrdinalIgnoreCase);
+        string Result = Template
+            .Replace("{Title}", MatchedTitle, StringComparison.OrdinalIgnoreCase)
+            .Replace("{ProcessName}", Snapshot.ProcessName, StringComparison.OrdinalIgnoreCase)
+            .Replace("{DisplayName}", Profile.DisplayName, StringComparison.OrdinalIgnoreCase)
+            .Replace("{Identifier}", Profile.Identifier, StringComparison.OrdinalIgnoreCase);
 
-        foreach (var (key, value) in capturedGroups)
+        foreach (KeyValuePair<string, string> Pair in CapturedGroups)
         {
-            result = result.Replace($"{{{key}}}", value, StringComparison.OrdinalIgnoreCase);
+            Result = Result.Replace($"{{{Pair.Key}}}", Pair.Value, StringComparison.OrdinalIgnoreCase);
         }
 
-        return result;
+        return Result;
     }
 
-    private static string? ExtractRegexMatch(string pattern, string input)
+    private static string? ExtractRegexMatch(string Pattern, string Input)
     {
-        if (string.IsNullOrWhiteSpace(input))
+        if (string.IsNullOrWhiteSpace(Input))
             return null;
 
         try
         {
-            var match = Regex.Match(input, pattern, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(500));
-            if (match.Success)
+            Match RegexMatch = Regex.Match(Input, Pattern, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(500));
+            if (RegexMatch.Success)
             {
-                return match.Groups.Count > 1 ? match.Groups[1].Value : match.Value;
+                return RegexMatch.Groups.Count > 1 ? RegexMatch.Groups[1].Value : RegexMatch.Value;
             }
         }
         catch
@@ -299,13 +291,13 @@ public class GameDetector : IGameDetector
         return null;
     }
 
-    private static string StripExe(string name)
+    private static string StripExe(string Name)
     {
-        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        if (Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
         {
-            return name[..^4];
+            return Name[..^4];
         }
-        return name;
+        return Name;
     }
 
     #endregion

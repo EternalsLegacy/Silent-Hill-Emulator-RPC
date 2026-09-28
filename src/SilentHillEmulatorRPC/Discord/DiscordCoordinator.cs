@@ -12,151 +12,149 @@ public class DiscordCoordinator : IDiscordCoordinator
 {
     #region Fields
 
-    private readonly ILogger<DiscordCoordinator> _logger;
-    private readonly object _syncLock = new();
-    private DiscordRpcClient? _client;
-    private bool _disposed;
+    private readonly ILogger<DiscordCoordinator> Logger;
+    private readonly object SyncLock = new();
+    private DiscordRpcClient? Client;
+    private bool Disposed;
 
     #endregion
 
     #region Properties
 
-    public bool IsInitialized => _client?.IsInitialized ?? false;
+    public bool IsInitialized => Client?.IsInitialized ?? false;
 
-    public string? CurrentApplicationId => _client?.ApplicationID;
+    public string? CurrentApplicationId => Client?.ApplicationID;
 
     #endregion
 
     #region Constructor
 
-    public DiscordCoordinator(ILogger<DiscordCoordinator> logger)
+    public DiscordCoordinator(ILogger<DiscordCoordinator> Logger)
     {
-        _logger = logger;
+        this.Logger = Logger;
     }
 
     #endregion
 
     #region Public Methods
 
-    public bool Connect(string applicationId)
+    public bool Connect(string ApplicationId)
     {
-        if (string.IsNullOrWhiteSpace(applicationId))
+        if (string.IsNullOrWhiteSpace(ApplicationId))
         {
-            _logger.LogWarning("Cannot connect to Discord: Application ID is empty or not configured.");
+            Logger.LogWarning("Cannot connect to Discord: Application ID is empty or not configured.");
             return false;
         }
 
-        lock (_syncLock)
+        lock (SyncLock)
         {
-            // If already connected with the same Application ID and still active, reuse it
-            if (_client != null &&
-                string.Equals(_client.ApplicationID, applicationId, StringComparison.OrdinalIgnoreCase) &&
-                _client.IsInitialized)
+            if (Client != null &&
+                string.Equals(Client.ApplicationID, ApplicationId, StringComparison.OrdinalIgnoreCase) &&
+                Client.IsInitialized)
             {
                 return true;
             }
 
-            // If switching application IDs or restarting client, clean up old client first
             CleanupClient();
 
             try
             {
-                _logger.LogInformation("Connecting to Discord IPC with Application ID: {AppId}", applicationId);
+                Logger.LogInformation("Connecting to Discord IPC with Application ID: {AppId}", ApplicationId);
 
-                _client = new DiscordRpcClient(applicationId)
+                Client = new DiscordRpcClient(ApplicationId)
                 {
                     Logger = new ConsoleLogger(DiscordRPC.Logging.LogLevel.Warning)
                 };
 
-                _client.OnReady += (sender, msg) =>
+                Client.OnReady += (Sender, Msg) =>
                 {
-                    _logger.LogInformation("Discord RPC connected successfully for user {User} (v{Version}).",
-                        msg.User.Username, msg.Version);
+                    Logger.LogInformation("Discord RPC connected successfully for user {User} (v{Version}).",
+                        Msg.User.Username, Msg.Version);
                 };
 
-                _client.OnPresenceUpdate += (sender, msg) =>
+                Client.OnPresenceUpdate += (Sender, Msg) =>
                 {
-                    _logger.LogDebug("Discord presence updated: {Details} | {State}",
-                        msg.Presence?.Details, msg.Presence?.State);
+                    Logger.LogDebug("Discord presence updated: {Details} | {State}",
+                        Msg.Presence?.Details, Msg.Presence?.State);
                 };
 
-                _client.OnError += (sender, msg) =>
+                Client.OnError += (Sender, Msg) =>
                 {
-                    _logger.LogError("Discord RPC Error [{Code}]: {Message}", msg.Code, msg.Message);
+                    Logger.LogError("Discord RPC Error [{Code}]: {Message}", Msg.Code, Msg.Message);
                 };
 
-                _client.OnConnectionFailed += (sender, msg) =>
+                Client.OnConnectionFailed += (Sender, Msg) =>
                 {
-                    _logger.LogWarning("Discord RPC connection failed (pipe {Pipe}). Is Discord running?", msg.FailedPipe);
+                    Logger.LogWarning("Discord RPC connection failed (pipe {Pipe}). Is Discord running?", Msg.FailedPipe);
                 };
 
-                _client.OnClose += (sender, msg) =>
+                Client.OnClose += (Sender, Msg) =>
                 {
-                    _logger.LogInformation("Discord RPC connection closed: {Reason}", msg.Reason);
+                    Logger.LogInformation("Discord RPC connection closed: {Reason}", Msg.Reason);
                 };
 
-                var initialized = _client.Initialize();
-                if (!initialized)
+                bool Initialized = Client.Initialize();
+                if (!Initialized)
                 {
-                    _logger.LogWarning("DiscordRpcClient.Initialize returned false. Discord may not be running.");
+                    Logger.LogWarning("DiscordRpcClient.Initialize returned false. Discord may not be running.");
                 }
 
-                return initialized;
+                return Initialized;
             }
-            catch (Exception ex)
+            catch (Exception Ex)
             {
-                _logger.LogError(ex, "Unexpected error while initializing Discord RPC client for {AppId}.", applicationId);
+                Logger.LogError(Ex, "Unexpected error while initializing Discord RPC client for {AppId}.", ApplicationId);
                 CleanupClient();
                 return false;
             }
         }
     }
 
-    public void SetPresence(RichPresence presence)
+    public void SetPresence(RichPresence Presence)
     {
-        lock (_syncLock)
+        lock (SyncLock)
         {
-            if (_client == null || !_client.IsInitialized)
+            if (Client == null || !Client.IsInitialized)
             {
-                _logger.LogDebug("Cannot set presence: Discord client is not initialized.");
+                Logger.LogDebug("Cannot set presence: Discord client is not initialized.");
                 return;
             }
 
             try
             {
-                _client.SetPresence(presence);
+                Client.SetPresence(Presence);
             }
-            catch (Exception ex)
+            catch (Exception Ex)
             {
-                _logger.LogError(ex, "Failed to send Rich Presence update to Discord.");
+                Logger.LogError(Ex, "Failed to send Rich Presence update to Discord.");
             }
         }
     }
 
     public void ClearPresence()
     {
-        lock (_syncLock)
+        lock (SyncLock)
         {
-            if (_client == null || !_client.IsInitialized)
+            if (Client == null || !Client.IsInitialized)
             {
                 return;
             }
 
             try
             {
-                _logger.LogInformation("Clearing Discord Rich Presence.");
-                _client.ClearPresence();
+                Logger.LogInformation("Clearing Discord Rich Presence.");
+                Client.ClearPresence();
             }
-            catch (Exception ex)
+            catch (Exception Ex)
             {
-                _logger.LogDebug(ex, "Error while clearing Discord Rich Presence.");
+                Logger.LogDebug(Ex, "Error while clearing Discord Rich Presence.");
             }
         }
     }
 
     public void Disconnect()
     {
-        lock (_syncLock)
+        lock (SyncLock)
         {
             CleanupClient();
         }
@@ -168,25 +166,25 @@ public class DiscordCoordinator : IDiscordCoordinator
 
     private void CleanupClient()
     {
-        if (_client == null)
+        if (Client == null)
             return;
 
         try
         {
-            if (_client.IsInitialized)
+            if (Client.IsInitialized)
             {
-                _client.ClearPresence();
-                _client.Deinitialize();
+                Client.ClearPresence();
+                Client.Deinitialize();
             }
-            _client.Dispose();
+            Client.Dispose();
         }
-        catch (Exception ex)
+        catch (Exception Ex)
         {
-            _logger.LogDebug(ex, "Error while disposing Discord RPC client.");
+            Logger.LogDebug(Ex, "Error while disposing Discord RPC client.");
         }
         finally
         {
-            _client = null;
+            Client = null;
         }
     }
 
@@ -196,8 +194,8 @@ public class DiscordCoordinator : IDiscordCoordinator
 
     public void Dispose()
     {
-        if (_disposed) return;
-        _disposed = true;
+        if (Disposed) return;
+        Disposed = true;
 
         Disconnect();
         GC.SuppressFinalize(this);

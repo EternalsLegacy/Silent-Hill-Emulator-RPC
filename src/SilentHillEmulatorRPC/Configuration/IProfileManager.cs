@@ -25,7 +25,7 @@ public interface IProfileManager
     /// <summary>
     /// Enables or disables detection for a specific game profile and saves the setting.
     /// </summary>
-    bool SetProfileEnabled(string identifier, bool isEnabled);
+    bool SetProfileEnabled(string Identifier, bool IsEnabled);
 
     #endregion
 }

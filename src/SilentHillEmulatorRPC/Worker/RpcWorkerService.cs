@@ -16,69 +16,69 @@ public class RpcWorkerService : BackgroundService
 {
     #region Fields
 
-    private readonly IOptionsMonitor<AppConfig> _configMonitor;
-    private readonly IProfileManager _profileManager;
-    private readonly IGameDetector _gameDetector;
-    private readonly IDiscordCoordinator _discordCoordinator;
-    private readonly IProcessProvider _processProvider;
-    private readonly IRpcStateTracker _stateTracker;
-    private readonly ILogger<RpcWorkerService> _logger;
-    private readonly RpcStateMachine _stateMachine = new();
+    private readonly IOptionsMonitor<AppConfig> ConfigMonitor;
+    private readonly IProfileManager ProfileManager;
+    private readonly IGameDetector GameDetector;
+    private readonly IDiscordCoordinator DiscordCoordinator;
+    private readonly IProcessProvider ProcessProvider;
+    private readonly IRpcStateTracker StateTracker;
+    private readonly ILogger<RpcWorkerService> Logger;
+    private readonly RpcStateMachine StateMachine = new();
 
-    private DateTime _lastReconnectAttempt = DateTime.MinValue;
+    private DateTime LastReconnectAttempt = DateTime.MinValue;
 
     #endregion
 
     #region Constructor
 
     public RpcWorkerService(
-        IOptionsMonitor<AppConfig> configMonitor,
-        IProfileManager profileManager,
-        IGameDetector gameDetector,
-        IDiscordCoordinator discordCoordinator,
-        IProcessProvider processProvider,
-        IRpcStateTracker stateTracker,
-        ILogger<RpcWorkerService> logger)
+        IOptionsMonitor<AppConfig> ConfigMonitor,
+        IProfileManager ProfileManager,
+        IGameDetector GameDetector,
+        IDiscordCoordinator DiscordCoordinator,
+        IProcessProvider ProcessProvider,
+        IRpcStateTracker StateTracker,
+        ILogger<RpcWorkerService> Logger)
     {
-        _configMonitor = configMonitor;
-        _profileManager = profileManager;
-        _gameDetector = gameDetector;
-        _discordCoordinator = discordCoordinator;
-        _processProvider = processProvider;
-        _stateTracker = stateTracker;
-        _logger = logger;
+        this.ConfigMonitor = ConfigMonitor;
+        this.ProfileManager = ProfileManager;
+        this.GameDetector = GameDetector;
+        this.DiscordCoordinator = DiscordCoordinator;
+        this.ProcessProvider = ProcessProvider;
+        this.StateTracker = StateTracker;
+        this.Logger = Logger;
 
-        _stateMachine.StateChanged += OnStateMachineChanged;
-        _profileManager.ProfileToggled += OnProfileToggled;
+        StateMachine.StateChanged += OnStateMachineChanged;
+        this.ProfileManager.ProfileToggled += OnProfileToggled;
     }
 
     #endregion
 
     #region BackgroundService Overrides
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken StoppingToken)
     {
-        _logger.LogInformation("====================================================");
-        _logger.LogInformation("  Silent Hill Universal Discord RPC Daemon started  ");
-        _logger.LogInformation("====================================================");
+        Logger.LogInformation("====================================================");
+        Logger.LogInformation("  Silent Hill Universal Discord RPC Daemon started  ");
+        Logger.LogInformation("====================================================");
 
-        LogLoadedProfiles(_configMonitor.CurrentValue);
+        LogLoadedProfiles(ConfigMonitor.CurrentValue);
 
-        while (!stoppingToken.IsCancellationRequested)
+        while (!StoppingToken.IsCancellationRequested)
         {
-            var config = _configMonitor.CurrentValue;
-            var pollInterval = TimeSpan.FromSeconds(Math.Max(1, config.PollingIntervalSeconds));
+            AppConfig Config = ConfigMonitor.CurrentValue;
+            TimeSpan PollInterval = TimeSpan.FromSeconds(Math.Max(1, Config.PollingIntervalSeconds));
 
             try
             {
-                switch (_stateMachine.CurrentState)
+                switch (StateMachine.CurrentState)
                 {
                     case ServiceState.Idle:
-                        HandleIdleState(config);
+                        HandleIdleState(Config);
                         break;
 
                     case ServiceState.ActiveGame:
-                        HandleActiveGameState(config);
+                        HandleActiveGameState(Config);
                         break;
 
                     case ServiceState.Terminating:
@@ -86,14 +86,14 @@ public class RpcWorkerService : BackgroundService
                         break;
                 }
             }
-            catch (Exception ex)
+            catch (Exception Ex)
             {
-                _logger.LogError(ex, "Unexpected error occurred during polling cycle.");
+                Logger.LogError(Ex, "Unexpected error occurred during polling cycle.");
             }
 
             try
             {
-                await Task.Delay(pollInterval, stoppingToken);
+                await Task.Delay(PollInterval, StoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -101,100 +101,91 @@ public class RpcWorkerService : BackgroundService
             }
         }
 
-        // Clean termination upon stopping
         HandleTerminatingState();
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
+    public override async Task StopAsync(CancellationToken CancellationToken)
     {
-        _logger.LogInformation("Shutting down Discord RPC Daemon...");
+        Logger.LogInformation("Shutting down Discord RPC Daemon...");
         HandleTerminatingState();
-        await base.StopAsync(cancellationToken);
+        await base.StopAsync(CancellationToken);
     }
 
     #endregion
 
     #region State Handling Methods
 
-    private void HandleIdleState(AppConfig config)
+    private void HandleIdleState(AppConfig Config)
     {
-        var processes = _processProvider.GetRunningProcesses();
-        var match = _gameDetector.DetectGame(config.Games, processes);
+        IReadOnlyList<ProcessSnapshot> Processes = ProcessProvider.GetRunningProcesses();
+        GameMatchResult? Match = GameDetector.DetectGame(Config.Games, Processes);
 
-        if (match == null)
+        if (Match == null)
         {
             return;
         }
 
-        if (string.IsNullOrWhiteSpace(match.Profile.DiscordApplicationId) ||
-            match.Profile.DiscordApplicationId.StartsWith("REPLACE_", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(Match.Profile.DiscordApplicationId) ||
+            Match.Profile.DiscordApplicationId.StartsWith("REPLACE_", StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogWarning(
+            Logger.LogWarning(
                 "Game detected [{Identifier}] '{DisplayName}' (PID {Pid}), but DiscordApplicationId is not set in configuration! Please enter your Client ID.",
-                match.Profile.Identifier, match.Profile.DisplayName, match.ProcessId);
+                Match.Profile.Identifier, Match.Profile.DisplayName, Match.ProcessId);
             return;
         }
 
-        _logger.LogInformation(">>> Game detected: {DisplayName} (PID: {Pid}, Process: '{ProcessName}')",
-            match.Profile.DisplayName, match.ProcessId, match.ProcessName);
+        Logger.LogInformation(">>> Game detected: {DisplayName} (PID: {Pid}, Process: '{ProcessName}')",
+            Match.Profile.DisplayName, Match.ProcessId, Match.ProcessName);
 
-        // Connect to Discord IPC
-        _discordCoordinator.Connect(match.Profile.DiscordApplicationId);
-
-        // Transition state
-        _stateMachine.TransitionToActive(match);
-
-        // Publish presence
-        PublishPresence(match);
+        DiscordCoordinator.Connect(Match.Profile.DiscordApplicationId);
+        StateMachine.TransitionToActive(Match);
+        PublishPresence(Match);
     }
 
-    private void HandleActiveGameState(AppConfig config)
+    private void HandleActiveGameState(AppConfig Config)
     {
-        var current = _stateMachine.CurrentMatch;
-        if (current == null)
+        GameMatchResult? Current = StateMachine.CurrentMatch;
+        if (Current == null)
         {
-            _stateMachine.TransitionToTerminating();
+            StateMachine.TransitionToTerminating();
             return;
         }
 
-        // Check if the current profile was disabled in the tray menu
-        var profile = config.Games.FirstOrDefault(g =>
-            string.Equals(g.Identifier, current.Profile.Identifier, StringComparison.OrdinalIgnoreCase));
+        GameProfile? Profile = Config.Games.FirstOrDefault(G =>
+            string.Equals(G.Identifier, Current.Profile.Identifier, StringComparison.OrdinalIgnoreCase));
 
-        if (profile != null && !profile.Enabled)
+        if (Profile != null && !Profile.Enabled)
         {
-            _logger.LogInformation("Active game {DisplayName} was disabled via UI.", current.Profile.DisplayName);
-            _stateMachine.TransitionToTerminating();
+            Logger.LogInformation("Active game {DisplayName} was disabled via UI.", Current.Profile.DisplayName);
+            StateMachine.TransitionToTerminating();
             return;
         }
 
-        // Verify if process and window title condition still hold
-        var stillActive = _gameDetector.IsMatchStillActive(
-            current.Profile,
-            current.ProcessId,
-            _processProvider,
-            out var updatedResult);
+        bool StillActive = GameDetector.IsMatchStillActive(
+            Current.Profile,
+            Current.ProcessId,
+            ProcessProvider,
+            out GameMatchResult? UpdatedResult);
 
-        if (!stillActive)
+        if (!StillActive)
         {
-            _logger.LogInformation("<<< Game closed or title changed: {DisplayName} (PID: {Pid})",
-                current.Profile.DisplayName, current.ProcessId);
+            Logger.LogInformation("<<< Game closed or title changed: {DisplayName} (PID: {Pid})",
+                Current.Profile.DisplayName, Current.ProcessId);
 
-            _stateMachine.TransitionToTerminating();
+            StateMachine.TransitionToTerminating();
             return;
         }
 
-        // Attempt reconnection if Discord wasn't running or closed
-        if (!_discordCoordinator.IsInitialized && config.AutoReconnect)
+        if (!DiscordCoordinator.IsInitialized && Config.AutoReconnect)
         {
-            var reconnectInterval = TimeSpan.FromSeconds(Math.Max(2, config.ReconnectDelaySeconds));
-            if (DateTime.UtcNow - _lastReconnectAttempt >= reconnectInterval)
+            TimeSpan ReconnectInterval = TimeSpan.FromSeconds(Math.Max(2, Config.ReconnectDelaySeconds));
+            if (DateTime.UtcNow - LastReconnectAttempt >= ReconnectInterval)
             {
-                _lastReconnectAttempt = DateTime.UtcNow;
-                _logger.LogDebug("Attempting to reconnect to Discord IPC for active game {DisplayName}...", current.Profile.DisplayName);
-                if (_discordCoordinator.Connect(current.Profile.DiscordApplicationId))
+                LastReconnectAttempt = DateTime.UtcNow;
+                Logger.LogDebug("Attempting to reconnect to Discord IPC for active game {DisplayName}...", Current.Profile.DisplayName);
+                if (DiscordCoordinator.Connect(Current.Profile.DiscordApplicationId))
                 {
-                    PublishPresence(updatedResult ?? current);
+                    PublishPresence(UpdatedResult ?? Current);
                 }
             }
         }
@@ -202,77 +193,75 @@ public class RpcWorkerService : BackgroundService
 
     private void HandleTerminatingState()
     {
-        _logger.LogInformation("Cleaning up Discord Presence and resetting session.");
+        Logger.LogInformation("Cleaning up Discord Presence and resetting session.");
 
         try
         {
-            _discordCoordinator.ClearPresence();
-            _discordCoordinator.Disconnect();
+            DiscordCoordinator.ClearPresence();
+            DiscordCoordinator.Disconnect();
         }
-        catch (Exception ex)
+        catch (Exception Ex)
         {
-            _logger.LogDebug(ex, "Exception during Discord client disconnection.");
+            Logger.LogDebug(Ex, "Exception during Discord client disconnection.");
         }
 
-        _stateMachine.TransitionToIdle();
+        StateMachine.TransitionToIdle();
     }
 
     #endregion
 
     #region Presence Publishing
 
-    private void PublishPresence(GameMatchResult match)
+    private void PublishPresence(GameMatchResult Match)
     {
-        var startTime = _stateMachine.SessionStartTimeUtc ?? DateTime.UtcNow;
-        var config = _configMonitor.CurrentValue;
+        DateTime StartTime = StateMachine.SessionStartTimeUtc ?? DateTime.UtcNow;
+        AppConfig Config = ConfigMonitor.CurrentValue;
 
-        // When ShowDetailsAndState is false (default), omit Details and State entirely
-        // so Discord displays strictly: Game Title, Elapsed Time, Large Icon, and Small Icon (like Destiny 2).
-        string? details = null;
-        string? state = null;
+        string? Details = null;
+        string? State = null;
 
-        if (config.ShowDetailsAndState)
+        if (Config.ShowDetailsAndState)
         {
-            details = string.IsNullOrWhiteSpace(match.Details) ? null : match.Details;
-            state = string.IsNullOrWhiteSpace(match.State) ? null : match.State;
+            Details = string.IsNullOrWhiteSpace(Match.Details) ? null : Match.Details;
+            State = string.IsNullOrWhiteSpace(Match.State) ? null : Match.State;
         }
 
-        var presence = new RichPresence
+        RichPresence Presence = new RichPresence
         {
-            Details = details,
-            State = state,
-            Timestamps = new Timestamps(startTime),
+            Details = Details,
+            State = State,
+            Timestamps = new Timestamps(StartTime),
             Assets = new Assets
             {
-                LargeImageKey = match.LargeImageKey,
-                LargeImageText = string.IsNullOrWhiteSpace(match.LargeImageText) ? null : match.LargeImageText,
-                SmallImageKey = string.IsNullOrWhiteSpace(match.SmallImageKey) ? null : match.SmallImageKey,
-                SmallImageText = string.IsNullOrWhiteSpace(match.SmallImageText) ? null : match.SmallImageText
+                LargeImageKey = Match.LargeImageKey,
+                LargeImageText = string.IsNullOrWhiteSpace(Match.LargeImageText) ? null : Match.LargeImageText,
+                SmallImageKey = string.IsNullOrWhiteSpace(Match.SmallImageKey) ? null : Match.SmallImageKey,
+                SmallImageText = string.IsNullOrWhiteSpace(Match.SmallImageText) ? null : Match.SmallImageText
             }
         };
 
-        _discordCoordinator.SetPresence(presence);
+        DiscordCoordinator.SetPresence(Presence);
     }
 
     #endregion
 
     #region Event Callbacks
 
-    private void OnStateMachineChanged(ServiceState oldState, ServiceState newState)
+    private void OnStateMachineChanged(ServiceState OldState, ServiceState NewState)
     {
-        _logger.LogInformation("State transition: [{OldState}] -> [{NewState}]", oldState, newState);
-        _stateTracker.UpdateState(newState, _stateMachine.CurrentMatch, _stateMachine.SessionStartTimeUtc);
+        Logger.LogInformation("State transition: [{OldState}] -> [{NewState}]", OldState, NewState);
+        StateTracker.UpdateState(NewState, StateMachine.CurrentMatch, StateMachine.SessionStartTimeUtc);
     }
 
-    private void OnProfileToggled(string identifier, bool isEnabled)
+    private void OnProfileToggled(string Identifier, bool IsEnabled)
     {
-        if (!isEnabled &&
-            _stateMachine.CurrentState == ServiceState.ActiveGame &&
-            _stateMachine.CurrentMatch != null &&
-            string.Equals(_stateMachine.CurrentMatch.Profile.Identifier, identifier, StringComparison.OrdinalIgnoreCase))
+        if (!IsEnabled &&
+            StateMachine.CurrentState == ServiceState.ActiveGame &&
+            StateMachine.CurrentMatch != null &&
+            string.Equals(StateMachine.CurrentMatch.Profile.Identifier, Identifier, StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogInformation("Currently running game [{Identifier}] was disabled by user in tray menu. Terminating presence.", identifier);
-            _stateMachine.TransitionToTerminating();
+            Logger.LogInformation("Currently running game [{Identifier}] was disabled by user in tray menu. Terminating presence.", Identifier);
+            StateMachine.TransitionToTerminating();
         }
     }
 
@@ -280,23 +269,23 @@ public class RpcWorkerService : BackgroundService
 
     #region Logging Helpers
 
-    private void LogLoadedProfiles(AppConfig config)
+    private void LogLoadedProfiles(AppConfig Config)
     {
-        var activeProfiles = config.Games.Where(p => p.Enabled).ToList();
-        _logger.LogInformation("Loaded {Count} active game profile(s):", activeProfiles.Count);
+        List<GameProfile> ActiveProfiles = Config.Games.Where(P => P.Enabled).ToList();
+        Logger.LogInformation("Loaded {Count} active game profile(s):", ActiveProfiles.Count);
 
-        foreach (var profile in activeProfiles)
+        foreach (GameProfile Profile in ActiveProfiles)
         {
-            var processList = profile.ProcessNames.Count > 0
-                ? string.Join(", ", profile.ProcessNames)
-                : profile.ProcessName ?? "none";
+            string ProcessList = Profile.ProcessNames.Count > 0
+                ? string.Join(", ", Profile.ProcessNames)
+                : Profile.ProcessName ?? "none";
 
-            var titleFilter = !string.IsNullOrWhiteSpace(profile.TitlePattern)
-                ? $" [Title: '{profile.TitlePattern}']"
+            string TitleFilter = !string.IsNullOrWhiteSpace(Profile.TitlePattern)
+                ? $" [Title: '{Profile.TitlePattern}']"
                 : "";
 
-            _logger.LogInformation("  - [{Id}] {Name}: Processes: ({Processes}){Title}",
-                profile.Identifier, profile.DisplayName, processList, titleFilter);
+            Logger.LogInformation("  - [{Id}] {Name}: Processes: ({Processes}){Title}",
+                Profile.Identifier, Profile.DisplayName, ProcessList, TitleFilter);
         }
     }
 

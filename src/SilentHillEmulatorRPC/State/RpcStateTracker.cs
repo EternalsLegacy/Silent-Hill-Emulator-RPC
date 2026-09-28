@@ -9,7 +9,7 @@ public class RpcStateTracker : IRpcStateTracker
 {
     #region Fields
 
-    private readonly object _syncLock = new();
+    private readonly object SyncLock = new();
 
     #endregion
 
@@ -29,16 +29,16 @@ public class RpcStateTracker : IRpcStateTracker
 
     #region Public Methods
 
-    public void UpdateState(ServiceState state, GameMatchResult? match, DateTime? sessionStartTimeUtc)
+    public void UpdateState(ServiceState State, GameMatchResult? Match, DateTime? SessionStartTimeUtc)
     {
-        lock (_syncLock)
+        lock (SyncLock)
         {
-            CurrentState = state;
-            CurrentMatch = match;
-            SessionStartTimeUtc = sessionStartTimeUtc;
+            CurrentState = State;
+            CurrentMatch = Match;
+            this.SessionStartTimeUtc = SessionStartTimeUtc;
         }
 
-        StateUpdated?.Invoke(state, match);
+        StateUpdated?.Invoke(State, Match);
     }
 
     #endregion

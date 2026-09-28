@@ -16,12 +16,12 @@ public interface IProcessProvider
     /// <summary>
     /// Gets a snapshot for a specific process ID, or null if the process is no longer running.
     /// </summary>
-    ProcessSnapshot? GetProcessById(int processId);
+    ProcessSnapshot? GetProcessById(int ProcessId);
 
     /// <summary>
     /// Checks if a process with the specified ID is still alive.
     /// </summary>
-    bool IsProcessAlive(int processId);
+    bool IsProcessAlive(int ProcessId);
 
     #endregion
 }

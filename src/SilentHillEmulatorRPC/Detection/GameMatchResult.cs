@@ -16,4 +16,9 @@ public record GameMatchResult(
     string? LargeImageText,
     string? SmallImageKey,
     string? SmallImageText
-);
+)
+{
+    #region Properties
+    // Positional record automatically generates PascalCase properties
+    #endregion
+}
