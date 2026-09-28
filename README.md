@@ -14,7 +14,7 @@ Displays strictly:
 
 1. **Make sure Discord is running.**
 2. **Disable conflicting games in Discord:**
-   * Go to **Discord Settings** &rarr; **Registered Games**.
+   * Go to **Discord Settings** → **Registered Games**.
    * Disable or remove detection for `sh3.exe` (so Discord does not falsely display *Silent Hunter 3*).
 3. **Run the Application:**
    * Launch `SilentHillEmulatorRPC.exe`.
@@ -28,4 +28,4 @@ Displays strictly:
 If you prefer using your own Discord Developer Applications instead of the preconfigured defaults:
 1. Create your application at [Discord Developer Portal](https://discord.com/developers/applications).
 2. Insert your **Application ID** into `appsettings.json`.
-3. Upload the cover and platform icons from the `img/` folder under **Rich Presence &rarr; Art Assets**.
+3. Upload the cover and platform icons from the `img/` folder under **Rich Presence → Art Assets**.
