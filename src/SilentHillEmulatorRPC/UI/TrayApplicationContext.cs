@@ -27,6 +27,7 @@ public class TrayApplicationContext : ApplicationContext
     private ContextMenuStrip? _contextMenu;
     private ToolStripMenuItem? _statusMenuItem;
     private readonly Dictionary<string, ToolStripMenuItem> _gameMenuItems = new(StringComparer.OrdinalIgnoreCase);
+    private bool _preventMenuClose;
 
     #endregion
 
@@ -65,7 +66,7 @@ public class TrayApplicationContext : ApplicationContext
         {
             Icon = icon,
             ContextMenuStrip = _contextMenu,
-            Text = TruncateTooltip("Silent Hill Discord RPC - Bereit"),
+            Text = TruncateTooltip("Silent Hill Discord RPC - Ready"),
             Visible = true
         };
 
@@ -79,7 +80,7 @@ public class TrayApplicationContext : ApplicationContext
         _contextMenu.Items.Clear();
         _gameMenuItems.Clear();
 
-        // Header
+        // Header Title
         var titleItem = new ToolStripMenuItem("Silent Hill Discord RPC")
         {
             Enabled = false,
@@ -88,7 +89,7 @@ public class TrayApplicationContext : ApplicationContext
         _contextMenu.Items.Add(titleItem);
 
         // Status Label
-        _statusMenuItem = new ToolStripMenuItem("⚪ Status: Wartet auf Spiel...")
+        _statusMenuItem = new ToolStripMenuItem("⚪ Status: Waiting for game...")
         {
             Enabled = false,
             Font = new Font(SystemFonts.DefaultFont, FontStyle.Italic)
@@ -98,7 +99,7 @@ public class TrayApplicationContext : ApplicationContext
         _contextMenu.Items.Add(new ToolStripSeparator());
 
         // Header for Game Detection Toggles
-        var toggleHeaderItem = new ToolStripMenuItem("Spiele-Erkennung:")
+        var toggleHeaderItem = new ToolStripMenuItem("Game Detection:")
         {
             Enabled = false,
             Font = new Font(SystemFonts.DefaultFont, FontStyle.Bold)
@@ -129,18 +130,36 @@ public class TrayApplicationContext : ApplicationContext
         _contextMenu.Items.Add(new ToolStripSeparator());
 
         // Open Configuration
-        var configItem = new ToolStripMenuItem("⚙️ Konfiguration öffnen (appsettings.json)", null, (s, e) => OpenConfigurationFile());
+        var configItem = new ToolStripMenuItem("⚙️ Open Configuration (appsettings.json)", null, (s, e) => OpenConfigurationFile());
         _contextMenu.Items.Add(configItem);
 
         // Open Assets Folder
-        var assetsItem = new ToolStripMenuItem("📁 Assets-Ordner öffnen (img)", null, (s, e) => OpenAssetsFolder());
+        var assetsItem = new ToolStripMenuItem("📁 Open Assets Folder (img)", null, (s, e) => OpenAssetsFolder());
         _contextMenu.Items.Add(assetsItem);
 
         _contextMenu.Items.Add(new ToolStripSeparator());
 
         // Exit
-        var exitItem = new ToolStripMenuItem("❌ Beenden", null, (s, e) => ExitApplication());
+        var exitItem = new ToolStripMenuItem("❌ Exit", null, (s, e) => ExitApplication());
         _contextMenu.Items.Add(exitItem);
+
+        // Prevent context menu from auto-closing when toggling checkboxes
+        _contextMenu.ItemClicked += (sender, e) =>
+        {
+            if (e.ClickedItem is ToolStripMenuItem menuItem && _gameMenuItems.ContainsValue(menuItem))
+            {
+                _preventMenuClose = true;
+            }
+        };
+
+        _contextMenu.Closing += (sender, e) =>
+        {
+            if (e.CloseReason == ToolStripDropDownCloseReason.ItemClicked && _preventMenuClose)
+            {
+                e.Cancel = true;
+                _preventMenuClose = false;
+            }
+        };
     }
 
     #endregion
@@ -151,7 +170,6 @@ public class TrayApplicationContext : ApplicationContext
     {
         if (e.Button == MouseButtons.Left)
         {
-            // Show context menu immediately on left-click
             try
             {
                 var method = typeof(NotifyIcon).GetMethod("ShowContextMenu",
@@ -174,18 +192,18 @@ public class TrayApplicationContext : ApplicationContext
             switch (state)
             {
                 case ServiceState.ActiveGame when match != null:
-                    _statusMenuItem.Text = $"🟢 Aktiv: {match.Profile.DisplayName}";
-                    _notifyIcon.Text = TruncateTooltip($"Silent Hill RPC - Aktiv: {match.Profile.DisplayName}");
+                    _statusMenuItem.Text = $"🟢 Active: {match.Profile.DisplayName}";
+                    _notifyIcon.Text = TruncateTooltip($"Silent Hill RPC - Active: {match.Profile.DisplayName}");
                     break;
 
                 case ServiceState.Terminating:
-                    _statusMenuItem.Text = "🟡 Beende Session...";
-                    _notifyIcon.Text = TruncateTooltip("Silent Hill Discord RPC - Beende...");
+                    _statusMenuItem.Text = "🟡 Terminating session...";
+                    _notifyIcon.Text = TruncateTooltip("Silent Hill Discord RPC - Terminating...");
                     break;
 
                 default:
-                    _statusMenuItem.Text = "⚪ Status: Bereit (Wartet auf Spiel)";
-                    _notifyIcon.Text = TruncateTooltip("Silent Hill Discord RPC - Bereit");
+                    _statusMenuItem.Text = "⚪ Status: Waiting for game...";
+                    _notifyIcon.Text = TruncateTooltip("Silent Hill Discord RPC - Ready");
                     break;
             }
         }, null);
@@ -221,7 +239,7 @@ public class TrayApplicationContext : ApplicationContext
             }
             else
             {
-                MessageBox.Show("Die Datei appsettings.json wurde nicht gefunden.", "Fehler", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("The file appsettings.json was not found.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
             }
         }
         catch (Exception ex)
@@ -245,7 +263,7 @@ public class TrayApplicationContext : ApplicationContext
             }
             else
             {
-                MessageBox.Show("Der Assets-Ordner 'img' wurde nicht gefunden.", "Hinweis", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("The assets folder 'img' was not found.", "Notice", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
         }
         catch (Exception ex)
